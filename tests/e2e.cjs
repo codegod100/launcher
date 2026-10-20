@@ -51,5 +51,63 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.deepEqual(await labels(), ["Ship it"]);
   console.log("todo ok");
 
+  // bench: keyed rows
+  await p.goto(BASE + "/examples/bench/");
+  await p.waitForSelector("#run");
+  const rows = () => p.$$eval("tbody tr", (rs) => rs.length);
+  const ids = () => p.$$eval("tbody td.id", (ts) => ts.map((t) => Number(t.textContent)));
+  const op = async (sel) => { await p.click(sel); await p.waitForTimeout(60); };
+  await op("#run");
+  assert.equal(await rows(), 1000);
+  assert.equal(await p.textContent(".rows"), "1000 rows");
+  await op("#update");
+  assert.match(await p.textContent("tbody tr:nth-child(1) td.lbl"), / !!!$/);
+  assert.doesNotMatch(await p.textContent("tbody tr:nth-child(2) td.lbl"), /!!!/);
+  // keyed patching must reuse row nodes: tag them, swap, and check identity
+  await p.$$eval("tbody tr", (rs) => rs.forEach((r, i) => { r.__tag = i; }));
+  const before = await ids();
+  await op("#swaprows");
+  const after = await ids();
+  assert.equal(after[1], before[998]);
+  assert.equal(after[998], before[1]);
+  assert.deepEqual(await p.$$eval("tbody tr", (rs) => [rs[0].__tag, rs[1].__tag, rs[2].__tag, rs[998].__tag]), [0, 998, 2, 1]);
+  await op("tbody tr:nth-child(3) td.lbl a");
+  assert.ok(await p.$("tbody tr:nth-child(3).danger"));
+  assert.equal(await p.$$eval("tr.danger", (rs) => rs.length), 1);
+  await op("tbody tr:nth-child(5) a.x");
+  assert.equal(await rows(), 999);
+  assert.deepEqual(await ids(), after.filter((_, i) => i !== 4));
+  assert.equal(await p.$eval("tbody tr:nth-child(5)", (r) => r.__tag), 5);
+  await op("#runlots");
+  assert.equal(await rows(), 10000);
+  await op("#add");
+  assert.equal(await rows(), 11000);
+  await op("#clear");
+  assert.equal(await rows(), 0);
+  const suite = await p.evaluate(() => window.ultraBench.runSuite(1));
+  assert.equal(suite.length, 9);
+  assert.ok(suite.every((r) => r.ms > 0));
+  console.log("bench ok:", suite.map((r) => `${r.name} ${r.ms.toFixed(0)}ms`).join(", "));
+
+  // life: animation loop via frame()
+  await p.goto(BASE + "/examples/life/");
+  await p.waitForSelector(".grid i");
+  const gen = async () => Number((await p.textContent(".stats")).match(/gen (\d+)/)[1]);
+  const g0 = await gen();
+  await p.waitForTimeout(500);
+  assert.ok((await gen()) > g0 + 5, "animation should advance");
+  assert.equal(await p.$$eval(".grid i", (cs) => cs.length), 10000);
+  await op("#play");
+  const g1 = await gen();
+  await p.waitForTimeout(200);
+  assert.equal(await gen(), g1, "paused");
+  await op("#step");
+  assert.equal(await gen(), g1 + 1);
+  await op("text=Glider guns");
+  assert.match(await p.textContent(".stats"), /gen 0 · pop 72 ·/);
+  await op("text=50²");
+  assert.equal(await p.$$eval(".grid i", (cs) => cs.length), 2500);
+  console.log("life ok");
+
   await b.close();
 })().catch((e) => { console.error(e); process.exit(1); });
