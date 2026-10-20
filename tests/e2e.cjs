@@ -1,5 +1,5 @@
 // Browser smoke test for the example apps.
-//   python3 tools/ultra.py serve &   then   node tests/e2e.cjs
+//   pixi run test   (or: pixi run serve &   then   node tests/e2e.cjs)
 const assert = require("assert");
 const { chromium } = require(process.env.PLAYWRIGHT || "playwright");
 const BASE = process.env.BASE || "http://localhost:8000";
