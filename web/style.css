@@ -58,6 +58,27 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
                border: 1px dashed rgb(255 255 255 / .3); }
 .widget-label { font-size: .875rem; opacity: .75; text-shadow: var(--shadow-text); }
 
+/* A widget being resized: handles sit just outside its right and bottom edges, where the
+   native widget view doesn't cover them; the extra margin keeps the next row clear. */
+.widget-slot { position: relative; }
+.widget-slot.resizing { margin-bottom: 1.75rem; outline: 2px solid rgb(255 255 255 / .85);
+                        outline-offset: 3px; transition: none; }
+.resize-handle { position: absolute; z-index: 2; touch-action: none; cursor: nwse-resize; }
+.resize-handle::after { content: ""; position: absolute; border-radius: 999px; background: #fff;
+                        box-shadow: 0 1px 6px rgb(0 0 0 / .45); }
+.resize-handle[data-edge="r"] { top: 0; bottom: 0; right: -16px; width: 16px; cursor: ew-resize; }
+.resize-handle[data-edge="r"]::after { top: 50%; left: 6px; width: 6px; height: 2.5rem; transform: translateY(-50%); }
+.resize-handle[data-edge="b"] { left: 0; right: 0; bottom: -1.75rem; height: 1.75rem; cursor: ns-resize; }
+.resize-handle[data-edge="b"]::after { left: 50%; top: 8px; width: 2.5rem; height: 6px; transform: translateX(-50%); }
+.resize-handle[data-edge="rb"] { right: -16px; bottom: -1.75rem; width: 2.75rem; height: 1.75rem; }
+.resize-handle[data-edge="rb"]::after { right: 4px; top: 6px; width: 14px; height: 14px; border-radius: 4px; }
+.resize-bar { position: fixed; left: 50%; bottom: calc(var(--bottom) + 1rem); z-index: 15; transform: translateX(-50%);
+              display: flex; align-items: center; gap: .5rem; padding: .4rem .4rem .4rem 1rem; border-radius: 999px;
+              background: rgb(0 0 0 / .8); color: #fff; font-size: .875rem; white-space: nowrap;
+              animation: ui-fade .15s; }
+.resize-bar .btn.ghost { color: #fff; }
+.resize-bar .btn.ghost:hover { background: rgb(255 255 255 / .12); color: #fff; }
+
 /* A slot picked up by a long press, while it is dragged (index.html moves it). */
 .slots > li { transition: transform .15s ease-out; }
 .slots > .lifted { z-index: 1; transform: scale(1.12); background: rgb(255 255 255 / .16);

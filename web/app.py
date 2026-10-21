@@ -10,7 +10,9 @@ from ui import btn_open, input_open, alert
 # An Android home screen. The home starts blank: you add apps and widgets to it
 # with a long press. Swiping down opens the drawer with every app and a search.
 # A long press on a home app or widget picks it up: drag it to move it, or let go
-# without moving to get its menu (index.html does the dragging).
+# without moving to get its menu (index.html does the dragging). Letting go of a
+# widget that way shows resize handles on its right and bottom edges instead:
+# dragging them snaps the widget to the grid, within the sizes it allows.
 #
 # The native shell (android/) serves this folder in a WebView, answers
 # apps.json and widgets.json, hosts the widgets as native views over the
@@ -100,6 +102,8 @@ DROP: Const[i32] = 36          # arg: 1 if it was dragged, 0 if just held (opens
 WQUERY: Const[i32] = 37        # widget picker search
 WCLEAR: Const[i32] = 38
 CHOOSE_FIRST_WIDGET: Const[i32] = 39
+RESIZE: Const[i32] = 40        # arg: columns * 4096 + height in px for the widget being resized
+RESIZE_DONE: Const[i32] = 41
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 40
@@ -124,12 +128,14 @@ comps: i32[512] = empty(512, dtype=int32)
 icons: i32[512] = empty(512, dtype=int32)
 n: i32 = 0
 # The home screen, in order. An app slot keeps its component name in hstr;
-# a widget slot keeps the widget's label there, its host id in hwid and its
-# height in CSS px in hh. hkey is a stable key for the DOM diff.
+# a widget slot keeps the widget's label there, its host id in hwid, its
+# height in CSS px in hh and its width in grid columns in hw (0: the whole row).
+# hkey is a stable key for the DOM diff.
 hkind: i32[512] = empty(512, dtype=int32)
 hstr: i32[512] = empty(512, dtype=int32)
 hwid: i32[512] = empty(512, dtype=int32)
 hh: i32[512] = empty(512, dtype=int32)
+hw: i32[512] = empty(512, dtype=int32)
 hkey: i32[512] = empty(512, dtype=int32)
 nh: i32 = 0
 next_key: i32 = 1
@@ -157,6 +163,7 @@ picking: i32 = 0     # drawer is in "add apps" mode: taps toggle home slots
 sheet: i32 = 0
 item: i32 = -1       # home slot the item sheet is about
 lifted: i32 = -1     # home slot picked up by a long press, being dragged
+resizing: i32 = -1   # widget slot showing resize handles
 pending: i32 = 0     # JSON handle of a request in flight
 
 
@@ -181,6 +188,7 @@ def init() -> None:
             hstr[nh] = h
             hwid[nh] = load_i32_at("ultra.home.wid", i, 0)
             hh[nh] = load_i32_at("ultra.home.h", i, 120)
+            hw[nh] = load_i32_at("ultra.home.w", i, 0)
             hkey[nh] = next_key
             next_key += 1
             nh += 1
@@ -200,6 +208,7 @@ def save_home() -> None:
         s_save_at("ultra.home.str", i, hstr[i])
         store_i32_at("ultra.home.wid", i, hwid[i])
         store_i32_at("ultra.home.h", i, hh[i])
+        store_i32_at("ultra.home.w", i, hw[i])
 
 
 def say(msg: str) -> None:
@@ -339,6 +348,7 @@ def push_slot(kind: i32, s: i32, wid: i32, h: i32) -> None:
     hstr[nh] = s
     hwid[nh] = wid
     hh[nh] = h
+    hw[nh] = 0
     hkey[nh] = next_key
     next_key += 1
     nh += 1
@@ -366,6 +376,7 @@ def remove_slot(at: i32) -> None:
         hstr[j] = hstr[j + 1]
         hwid[j] = hwid[j + 1]
         hh[j] = hh[j + 1]
+        hw[j] = hw[j + 1]
         hkey[j] = hkey[j + 1]
     nh -= 1
     save_home()
@@ -385,6 +396,9 @@ def swap_slots(a: i32, b: i32) -> None:
     t = hh[a]
     hh[a] = hh[b]
     hh[b] = t
+    t = hw[a]
+    hw[a] = hw[b]
+    hw[b] = t
     t = hkey[a]
     hkey[a] = hkey[b]
     hkey[b] = t
@@ -411,17 +425,18 @@ def slot_of_widget(wid: i32) -> i32:
 
 
 def close_all() -> None:
-    global drawer, picking, sheet, item, lifted
+    global drawer, picking, sheet, item, lifted, resizing
     s_clear(query)
     drawer = 0
     picking = 0
     sheet = NONE
     item = -1
     lifted = -1
+    resizing = -1
 
 # ---- Update
 def update(msg: i32, arg: i32) -> None:
-    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted
+    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted, resizing
     i: i32
     if msg == LOADED:
         load_apps(arg)
@@ -452,6 +467,7 @@ def update(msg: i32, arg: i32) -> None:
             launch(comps[i])
             close_all()
     elif msg == OPEN_HOME:
+        resizing = -1
         launch(hstr[arg])
     elif msg == ADD_HOME:
         haptic()
@@ -463,15 +479,18 @@ def update(msg: i32, arg: i32) -> None:
         elif nh < HOME_CAP:
             push_slot(APP, s_dup(comps[arg]), 0, 0)
     elif msg == MENU:
+        resizing = -1
         haptic()
         sheet = SHEET_MENU
     elif msg == LIFT:
         if drawer == 0 and sheet == NONE:
             haptic()
+            resizing = -1
             lifted = arg
     elif msg == WIDGET_MENU:
         i = slot_of_widget(arg)
         if i >= 0 and drawer == 0 and sheet == NONE:
+            resizing = -1
             lifted = i
     elif msg == DRAG_TO:
         if lifted >= 0 and arg >= 0 and arg < nh and arg != lifted:
@@ -479,9 +498,19 @@ def update(msg: i32, arg: i32) -> None:
             lifted = arg
     elif msg == DROP:
         if lifted >= 0 and arg == 0:
-            item = lifted
-            sheet = SHEET_ITEM
+            if hkind[lifted] == WIDGET:
+                resizing = lifted
+            else:
+                item = lifted
+                sheet = SHEET_ITEM
         lifted = -1
+    elif msg == RESIZE:
+        if resizing >= 0:
+            hw[resizing] = arg // 4096
+            hh[resizing] = arg % 4096
+            save_home()
+    elif msg == RESIZE_DONE:
+        resizing = -1
     elif msg == CLOSE_SHEET:
         sheet = NONE
         item = -1
@@ -510,6 +539,7 @@ def update(msg: i32, arg: i32) -> None:
             push_slot(WIDGET, s_dup(wlabels[chosen]), arg, wheights[chosen])
             chosen = -1
     elif msg == REMOVE:
+        resizing = -1
         remove_slot(arg)
         sheet = NONE
         item = -1
@@ -544,6 +574,8 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == BACK:
         if lifted >= 0:
             lifted = -1
+        elif resizing >= 0:
+            resizing = -1
         elif sheet != NONE:
             sheet = NONE
             item = -1
@@ -562,6 +594,34 @@ def view_icon(h: i32) -> None:
     end()
 
 
+def view_handle(edge: str) -> None:
+    """A resize handle just outside the slot (the native widget covers the inside)."""
+    el("span")
+    cls("resize-handle")
+    attr("data-edge", edge)
+    attr("aria-hidden", "true")
+    end()
+
+
+def view_resize_bar() -> None:
+    el("div")
+    cls("resize-bar")
+    attr("role", "toolbar")
+    el("span")
+    cls("resize-hint")
+    text("Drag the handles to resize")
+    end()
+    btn_open("ghost", REMOVE, resizing)
+    cls("sm")
+    text("Remove")
+    end()
+    btn_open("primary", RESIZE_DONE, 0)
+    cls("sm")
+    text("Done")
+    end()
+    end()
+
+
 def view_home_slot(i: i32) -> None:
     row: i32
     if hkind[i] == WIDGET:
@@ -569,20 +629,31 @@ def view_home_slot(i: i32) -> None:
         key(hkey[i])
         cls("widget-slot")
         cls_if("lifted", i == lifted)
+        cls_if("resizing", i == resizing)
         attr_num("data-slot", i)
-        s_set(scratch, "height:")
+        if hw[i] > 0:
+            s_set(scratch, "grid-column:span ")
+            s_add_num(scratch, hw[i])
+            s_add(scratch, ";height:")
+        else:
+            s_set(scratch, "height:")
         s_add_num(scratch, hh[i])
         s_add(scratch, "px")
         attr_ref("style", scratch)
         # The native widget view is laid over slots marked live, so only mark
-        # them while nothing covers the home screen.
-        if drawer == 0 and sheet == NONE:
+        # them while nothing covers the home screen. While one is resized the
+        # others step aside, so nothing native covers its handles.
+        if drawer == 0 and sheet == NONE and (resizing < 0 or i == resizing):
             attr_num("data-wid", hwid[i])
         on_longpress(LIFT, i)
         el("span")
         cls("widget-label")
         text_ref(hstr[i])
         end()
+        if i == resizing:
+            view_handle("r")
+            view_handle("b")
+            view_handle("rb")
         end()
         return
     row = app_of(hstr[i])
@@ -626,6 +697,8 @@ def view_home() -> None:
     i: i32
     div("home")
     on_longpress(MENU, 0)
+    if resizing >= 0:
+        on_click(RESIZE_DONE, 0)   # a tap beside the widget finishes
     el("button")
     cls("pull")
     attr("aria-label", "All apps")
@@ -826,6 +899,8 @@ def view() -> None:
         view_drawer()
     if sheet != NONE:
         view_sheet()
+    elif resizing >= 0 and drawer == 0:
+        view_resize_bar()
     if s_len(notice) > 0:
         el("div")
         cls("notice")

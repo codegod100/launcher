@@ -16,6 +16,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
@@ -28,6 +29,7 @@ import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Base64;
 import android.util.Log;
+import android.util.SizeF;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -73,7 +75,8 @@ import java.util.concurrent.Executors;
  *   wicon?p=PROV    the provider's icon as a PNG
  *
  * and exposes window.Android (launch, appInfo, addWidget, removeWidget, placeWidgets,
- * openSettings, pickWallpaper, openRecents, haptic, is24Hour) for the app's @jscall imports.
+ * widgetLimits, excludeGestures, openSettings, pickWallpaper, openRecents, haptic, is24Hour)
+ * for the app's @jscall imports and index.html.
  *
  * Widgets are real AppWidgetHostViews in a layer above the WebView. The page reports where
  * its live widget slots are (placeWidgets), and this class moves the views there. Package
@@ -93,6 +96,7 @@ public class MainActivity extends Activity {
     private AppWidgetManager widgets;
     private AppWidgetHost widgetHost;
     private final Map<Integer, AppWidgetHostView> widgetViews = new HashMap<>();
+    private final Map<Integer, Long> widgetSizes = new HashMap<>(); // last size told to each widget
     private int pendingWidget = -1;
     private boolean ready;
     private int insetTop, insetBottom; // CSS px
@@ -163,6 +167,7 @@ public class MainActivity extends Activity {
             return insets;
         });
         widgetViews.clear();
+        widgetSizes.clear();
         widgetLayer = new FrameLayout(this);
         FrameLayout root = new FrameLayout(this);
         root.addView(web);
@@ -473,7 +478,54 @@ public class MainActivity extends Activity {
     private void removeWidget(int id) {
         AppWidgetHostView v = widgetViews.remove(id);
         if (v != null) widgetLayer.removeView(v);
+        widgetSizes.remove(id);
         widgetHost.deleteAppWidgetId(id);
+    }
+
+    /**
+     * How far a placed widget may be resized, in CSS px: {"minW", "minH", "maxW", "maxH"
+     * (0 = no limit), "h", "v" (whether it resizes horizontally / vertically)}.
+     */
+    private String widgetLimits(int id) {
+        AppWidgetProviderInfo w = widgets.getAppWidgetInfo(id);
+        JSONObject o = new JSONObject();
+        try {
+            if (w == null) return o.toString();
+            float d = getResources().getDisplayMetrics().density;
+            // A minResize larger than the min size (or unset) means the min size applies.
+            int minW = w.minResizeWidth > 0 && w.minResizeWidth < w.minWidth ? w.minResizeWidth : w.minWidth;
+            int minH = w.minResizeHeight > 0 && w.minResizeHeight < w.minHeight ? w.minResizeHeight : w.minHeight;
+            int maxW = 0, maxH = 0;
+            if (Build.VERSION.SDK_INT >= 31) {
+                maxW = w.maxResizeWidth;
+                maxH = w.maxResizeHeight;
+            }
+            o.put("minW", Math.round(minW / d)).put("minH", Math.round(minH / d))
+                    .put("maxW", Math.round(maxW / d)).put("maxH", Math.round(maxH / d))
+                    .put("h", (w.resizeMode & AppWidgetProviderInfo.RESIZE_HORIZONTAL) != 0)
+                    .put("v", (w.resizeMode & AppWidgetProviderInfo.RESIZE_VERTICAL) != 0);
+        } catch (JSONException e) {
+            Log.w("ultra", "widget limits", e);
+        }
+        return o.toString();
+    }
+
+    /** Keep the system's edge gestures off these page rects ([[x, y, w, h], ...] in CSS px). */
+    private void excludeGestures(String json) {
+        if (Build.VERSION.SDK_INT < 29) return;
+        float d = getResources().getDisplayMetrics().density;
+        List<Rect> rects = new ArrayList<>();
+        try {
+            JSONArray a = new JSONArray(json);
+            for (int i = 0; i < a.length(); i++) {
+                JSONArray r = a.getJSONArray(i);
+                int x = Math.round(r.getInt(0) * d), y = Math.round(r.getInt(1) * d);
+                rects.add(new Rect(x, y, x + Math.round(r.getInt(2) * d), y + Math.round(r.getInt(3) * d)));
+            }
+        } catch (JSONException e) {
+            return;
+        }
+        web.setSystemGestureExclusionRects(rects);
     }
 
     /** Lay widget views over the page's live slots: [[id, x, y, w, h], ...] in CSS px. */
@@ -511,7 +563,18 @@ public class MainActivity extends Activity {
             lp.topMargin = r[1];
             v.setLayoutParams(lp);
             v.setVisibility(View.VISIBLE);
-            v.updateAppWidgetSize(new Bundle(), r[4], r[5], r[4], r[5]);
+            // Scrolling moves a widget without resizing it; only tell it about new sizes.
+            long size = ((long) r[4] << 32) | r[5];
+            Long was = widgetSizes.put(id, size);
+            if (was == null || was != size) {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    List<SizeF> sizes = new ArrayList<>();
+                    sizes.add(new SizeF(r[4], r[5]));
+                    v.updateAppWidgetSize(new Bundle(), sizes);
+                } else {
+                    v.updateAppWidgetSize(new Bundle(), r[4], r[5], r[4], r[5]);
+                }
+            }
         }
     }
 
@@ -676,6 +739,14 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void placeWidgets(String json) {
             main.post(() -> MainActivity.this.placeWidgets(json));
+        }
+
+        @JavascriptInterface public String widgetLimits(int id) {
+            return MainActivity.this.widgetLimits(id);
+        }
+
+        @JavascriptInterface public void excludeGestures(String json) {
+            main.post(() -> MainActivity.this.excludeGestures(json));
         }
 
         @JavascriptInterface public void loadIcons(String keys) {

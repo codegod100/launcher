@@ -1,6 +1,6 @@
 # ultra launcher
 
-An Android home screen written as an [ultra](https://github.com/nandi-conda/ultra) app (LPython compiled to WebAssembly, Elm-style). The home starts blank with a clock: long-press it to add apps (the drawer opens in a pick mode) or widgets, and long-press anything on it to move or remove it. Swipe down for the drawer with every app and a search (Enter opens the first match); long-press an app there to put it on the home screen, and swipe up to close it. The panel under the clock has a **Windows** button that opens Recents. The layout is saved in localStorage.
+An Android home screen written as an [ultra](https://github.com/nandi-conda/ultra) app (LPython compiled to WebAssembly, Elm-style). The home starts blank with a clock: long-press it to add apps (the drawer opens in a pick mode) or widgets, and long-press anything on it to drag it somewhere else; let go without moving to get its menu, or, for a widget, handles on its edges that resize it to the grid. Swipe down for the drawer with every app and a search (Enter opens the first match); long-press an app there to put it on the home screen, and swipe up to close it. The panel under the clock has a **Windows** button that opens Recents. The layout is saved in localStorage.
 
 ## Install
 

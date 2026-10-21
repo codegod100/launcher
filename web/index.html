@@ -28,6 +28,7 @@
       addWidget: () => setTimeout(() => window.ultraHome.widgetAdded(demoWidget++), 0),
       removeWidget: () => {},
       placeWidgets: () => {},
+      widgetLimits: () => JSON.stringify({ minW: 120, minH: 80, maxW: 0, maxH: 0, h: true, v: true }),
       openSettings: () => toast("Open system settings"),
       pickWallpaper: () => toast("Pick a wallpaper"),
       openRecents: () => toast("Show open windows"),
@@ -53,7 +54,14 @@
       });
       const j = JSON.stringify(slots);
       if (j !== placed) { placed = j; host.placeWidgets(j); }
+      // Keep the system's edge swipes (back) off the resize handles.
+      const handles = JSON.stringify([...document.querySelectorAll(".resize-handle")].map((h) => {
+        const r = h.getBoundingClientRect();
+        return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+      }));
+      if (handles !== excluded) { excluded = handles; host.excludeGestures?.(handles); }
     };
+    let excluded = "[]";
 
     // Icons: each <img class="icon" data-icon=KEY> gets its src from here. On a phone the
     // shell draws icons on its own thread and hands them back as data: URIs in batches
@@ -113,7 +121,7 @@
 
     // Messages the shell and the gestures below send (keep in sync with app.py).
     const TICK = 1, RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
-          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36;
+          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40;
 
     // Dragging a home slot. A long press lifts it (app.py marks it .lifted); moving the
     // finger then slides it to the slot under the finger, and letting go drops it there.
@@ -155,6 +163,62 @@
     addEventListener("touchmove", (e) => {
       if (drag && document.querySelector(".slots > .lifted") && e.cancelable) e.preventDefault();
     }, { passive: false });
+
+    // Resizing a widget. Holding a widget and letting go without moving shows handles on
+    // its right edge, bottom edge and corner (app.py). Dragging one snaps the widget to
+    // whole grid columns and half rows, within the shell's limits for that widget
+    // (widgetLimits, CSS px: min/max size, 0 = no max, and whether it resizes h and v).
+    const CELL = 88; // a row of app tiles
+    let rs = null, swallowClick = false;
+    const span = (k, size, gap) => k * size + (k - 1) * gap;
+    const fit = (want, lo, hi, size, gap, min, max) => {
+      // the step nearest to want, kept within [min, max] px where it can be
+      let k = Math.round((want + gap) / (size + gap));
+      while (k < hi && span(k, size, gap) < min - 8) k++;
+      while (k > lo && max > 0 && span(k, size, gap) > max + 8) k--;
+      return Math.max(lo, Math.min(hi, k));
+    };
+    addEventListener("pointerdown", (e) => {
+      const h = e.target.closest?.(".resize-handle");
+      if (!h || !e.isPrimary) return;
+      e.stopPropagation(); e.preventDefault(); // not a long press on the slot under it
+      const li = h.closest("li"), slots = li.parentElement, cs = getComputedStyle(slots);
+      const cols = cs.gridTemplateColumns.split(" ").map(parseFloat);
+      const wid = +li.dataset.wid || 0;
+      let lim = {};
+      try { lim = JSON.parse(host.widgetLimits?.(wid) || "{}"); } catch {}
+      const r = li.getBoundingClientRect();
+      rs = { li, edge: h.dataset.edge, left: r.left, top: r.top, lim, n: cols.length, colW: cols[0],
+             gap: parseFloat(cs.columnGap) || 0, rgap: parseFloat(cs.rowGap) || 0,
+             cols: Math.round((r.width + (parseFloat(cs.columnGap) || 0)) / (cols[0] + (parseFloat(cs.columnGap) || 0))),
+             h: Math.round(r.height) };
+      dragged = true;
+      h.setPointerCapture?.(e.pointerId);
+    }, true);
+    addEventListener("pointermove", (e) => {
+      if (!rs) return;
+      const { lim, n, colW, gap, rgap } = rs, half = (CELL + rgap) / 2;
+      let cols = rs.cols, h = rs.h;
+      if (rs.edge !== "b" && lim.h !== false)
+        cols = fit(e.clientX - rs.left, 1, n, colW, gap, lim.minW || 0, lim.maxW || 0);
+      if (rs.edge !== "r" && lim.v !== false) {
+        // half-row steps: 2 halves are one row of tiles, 4 are two rows with the gap between
+        const k = fit(e.clientY - rs.top + rgap, 2, 40, half, 0, (lim.minH || 0) + rgap, lim.maxH ? lim.maxH + rgap : 0);
+        h = Math.round(k * half - rgap);
+      }
+      if (cols === rs.cols && h === rs.h) return;
+      rs.cols = cols; rs.h = h;
+      host.haptic();
+      app.dispatch(RESIZE, (cols >= n ? 0 : cols) * 4096 + h);
+    }, true);
+    const endResize = () => { if (rs) { rs = null; swallowClick = true; setTimeout(() => swallowClick = false, 0); } };
+    addEventListener("pointerup", endResize, true);
+    addEventListener("pointercancel", endResize, true);
+    addEventListener("click", (e) => { // the click that ends a handle drag isn't a tap beside the widget
+      if (swallowClick || e.target.closest?.(".resize-handle")) { swallowClick = false; e.stopPropagation(); e.preventDefault(); }
+    }, true);
+    addEventListener("touchmove", (e) => { if (rs && e.cancelable) e.preventDefault(); }, { passive: false });
+
     window.ultraHome = {
       tick: () => { formats(); app.dispatch(TICK, 1); },
       reload: () => app.dispatch(RELOAD, 0),
