@@ -21,8 +21,15 @@ jobs:
         with:
           submodules: true
       - uses: prefix-dev/setup-pixi@v0.9.3
+      # Playwright's browser download hangs while unpacking under pixi's Node 26, so fetch
+      # Chromium with the runner's own Node; the test itself still runs in the pixi env.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
       - name: Fetch Playwright
-        run: pixi run npm install --no-save --no-package-lock playwright@1.56.1 && pixi run ./node_modules/.bin/playwright install --with-deps chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          ./node_modules/.bin/playwright install --with-deps chromium
       - name: Build the wasm and run the browser test
         run: pixi run test
       - name: Check the committed web/app.wasm is up to date
