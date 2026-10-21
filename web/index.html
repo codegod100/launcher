@@ -75,9 +75,23 @@
       if (host.loadIcons) host.loadIcons(JSON.stringify(want));
       else gotIcons(Object.fromEntries(want.map((k) => [k, k])));
     };
+    // An icon the shell couldn't draw ("") is asked for again, up to 3 times, with backoff;
+    // until then, and after, it shows as a blank disc.
+    const tries = new Map();
     const gotIcons = (batch) => {
-      for (const k in batch) { iconSrc.set(k, batch[k]); asked.delete(k); }
+      const again = [];
+      for (const k in batch) {
+        iconSrc.set(k, batch[k]); asked.delete(k);
+        const n = tries.get(k) || 0;
+        if (!batch[k] && n < 3) { tries.set(k, n + 1); again.push(k); }
+      }
       fillIcons();
+      if (again.length) setTimeout(() => {
+        for (const k of again) iconSrc.delete(k);
+        for (const img of document.querySelectorAll("img.icon[data-icon]"))
+          if (again.includes(img.dataset.icon)) img.__icon = undefined;
+        fillIcons();
+      }, 800 * (tries.get(again[0]) || 1));
     };
     window.ultraIcons = gotIcons; // the shell calls this before ultraHome exists, too
 
@@ -108,7 +122,7 @@
       widgetAdded: (id) => app.dispatch(WIDGET_ADDED, id),
       widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
       place: () => { placed = ""; place(); },
-      resetIcons: () => { iconSrc.clear(); asked.clear();
+      resetIcons: () => { iconSrc.clear(); asked.clear(); tries.clear();
         for (const img of document.querySelectorAll("img.icon")) img.__icon = undefined; },
     };
     document.addEventListener("visibilitychange", () => { if (!document.hidden) window.ultraHome.tick(); });

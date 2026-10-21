@@ -98,6 +98,7 @@ public class MainActivity extends Activity {
     private LauncherApps launcher;
     private final UserHandle user = Process.myUserHandle();
     private final Map<String, byte[]> icons = new ConcurrentHashMap<>();
+    private final Map<String, LauncherActivityInfo> activities = new ConcurrentHashMap<>();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService iconThread = Executors.newSingleThreadExecutor();
 
@@ -274,6 +275,7 @@ public class MainActivity extends Activity {
             ComponentName cn = a.getComponentName();
             if (cn.getPackageName().equals(getPackageName())) continue;
             String c = cn.flattenToShortString();
+            activities.put(c, a);
             apps.put(new JSONObject()
                     .put("label", labels.get(a))
                     .put("component", c)
@@ -299,6 +301,7 @@ public class MainActivity extends Activity {
                 return null;
             }
             if (png != null) icons.put(c, png);
+            else Log.w("ultra", "no icon for " + c);
             return png;
         }
     }
@@ -306,9 +309,17 @@ public class MainActivity extends Activity {
     private byte[] drawIcon(String c) {
         ComponentName cn = c == null ? null : ComponentName.unflattenFromString(c);
         if (cn == null) return null;
-        LauncherActivityInfo info = launcher.resolveActivity(
-                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(cn), user);
-        if (info == null) return null;
+        // Prefer the LauncherActivityInfo that apps.json was built from; resolve only if it
+        // isn't there (e.g. an icon asked for before the list was built).
+        LauncherActivityInfo info = activities.get(c);
+        if (info == null) {
+            info = launcher.resolveActivity(
+                    new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(cn), user);
+        }
+        if (info == null) {
+            Log.w("ultra", "no launchable activity for " + c);
+            return null;
+        }
         int dpi = getResources().getDisplayMetrics().densityDpi;
         Drawable d = info.getIcon(dpi);
         if (d == null) d = getPackageManager().getDefaultActivityIcon();
