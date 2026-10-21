@@ -29,7 +29,21 @@ android {
         ignoreAssetsPattern = "!app.py:!apps.json:!widgets.json:!__pycache__:!.*"
     }
 
+    signingConfigs {
+        // One committed debug key, so every CI build installs over the last one.
+        // (A fresh runner would otherwise sign with a newly generated debug key.)
+        debug {
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
         }
