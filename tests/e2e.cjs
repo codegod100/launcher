@@ -23,7 +23,9 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.ok(await p.$(".count.neg"));
   await p.click("text=Auto-increment"); await p.waitForTimeout(1200);
   assert.ok((await count()) > -8);
-  await p.click("text=Stop auto");
+  assert.equal(await p.getAttribute(".switch", "aria-checked"), "true");
+  await p.click("text=Auto-increment"); await tick();
+  assert.equal(await p.getAttribute(".switch", "aria-checked"), "false");
   console.log("counter ok");
 
   // todo
@@ -38,8 +40,8 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await tick();
   assert.deepEqual(await labels(), ["Write LPython", "Compile to wasm", "Ship it"]);
   assert.equal(await p.inputValue("input.new"), "");
-  await p.click(".item:nth-child(2) input"); await tick();
-  assert.equal(await p.textContent(".footer span"), "2 left");
+  await p.click(".item:nth-child(2) .checkbox"); await tick();
+  assert.equal(await p.textContent(".footer .badge"), "2 left");
   await p.click("text=Active"); await tick();
   assert.deepEqual(await labels(), ["Write LPython", "Ship it"]);
   await p.click("text=All"); await tick();
@@ -108,6 +110,33 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await op("text=50²");
   assert.equal(await p.$$eval(".grid i", (cs) => cs.length), 2500);
   console.log("life ok");
+
+  // ui: component gallery
+  await p.goto(BASE + "/examples/ui/");
+  await p.waitForSelector(".card");
+  await p.fill(".input", "Ada"); await p.press(".input", "Enter"); await tick();
+  assert.match(await p.textContent(".stack p.muted"), /Saved Ada\./);
+  await p.click("text=Accept terms"); await tick();
+  assert.equal(await p.getAttribute(".checkbox", "aria-checked"), "true");
+  await p.click("text=Email notifications"); await tick();
+  assert.equal(await p.getAttribute(".switch", "aria-checked"), "false");
+  await p.click("text=Password"); await tick();
+  assert.equal(await p.textContent("[role=tabpanel]"), "Change your password here.");
+  await p.click("text=Delete project"); await tick();
+  assert.ok(await p.$(".dialog"));
+  await p.keyboard.press("Escape"); await tick();
+  assert.ok(!(await p.$(".dialog")), "Escape closes the dialog");
+  await p.click("text=Delete project"); await tick();
+  await p.click(".dialog-overlay", { position: { x: 10, y: 10 } }); await tick();
+  assert.ok(!(await p.$(".dialog")), "backdrop closes the dialog");
+  await p.click("text=Delete project"); await tick();
+  await p.click(".dialog .btn.destructive"); await tick();
+  assert.ok(await p.$(".alert.destructive"));
+  await p.click("text=INV002"); await tick();
+  assert.equal(await p.getAttribute("tbody tr:nth-child(2)", "aria-selected"), "true");
+  await p.click("text=Dark"); await tick();
+  assert.ok(await p.$(".page.dark"));
+  console.log("ui ok");
 
   await b.close();
 })().catch((e) => { console.error(e); process.exit(1); });
