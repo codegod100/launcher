@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ultra · Launcher</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app"></main>
+  <div id="toast" role="status"></div>
+  <script type="module">
+    import { mount } from "./ultra.js";
+
+    // On a phone, MainActivity.java adds window.Android and serves apps.json.
+    // In a desktop browser the demo apps.json is served and these stand-ins run.
+    const toast = (s) => {
+      const t = document.getElementById("toast");
+      t.textContent = s; t.classList.add("show");
+      clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 1600);
+    };
+    const host = window.Android || {
+      launch: (c) => toast("Open " + c),
+      appInfo: (c) => toast("App info for " + c),
+      openSettings: () => toast("Open system settings"),
+      pickWallpaper: () => toast("Pick a wallpaper"),
+      is24Hour: () => false,
+    };
+    if (!window.Android) document.documentElement.classList.add("demo");
+
+    let fmtTime, fmtDate;
+    const formats = () => {
+      fmtTime = new Intl.DateTimeFormat(undefined,
+        { hour: "numeric", minute: "2-digit", hourCycle: host.is24Hour() ? "h23" : "h12" });
+      fmtDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
+    };
+    formats();
+
+    const app = await mount("#app", "./app.wasm", {
+      imports: ({ strs }) => ({
+        launch: (h) => host.launch(strs[h]),
+        app_info: (h) => host.appInfo(strs[h]),
+        open_settings: () => host.openSettings(),
+        pick_wallpaper: () => host.pickWallpaper(),
+        clock_time: (h) => { strs[h] = fmtTime.format(new Date()).replace(/\s?[AP]M$/i, ""); },
+        clock_date: (h) => { strs[h] = fmtDate.format(new Date()); },
+      }),
+    });
+
+    // Messages the native side sends (keep in sync with app.py).
+    const TICK = 11, RELOAD = 12, HOME = 13, BACK = 14;
+    window.ultraHome = {
+      tick: () => { formats(); app.dispatch(TICK, 1); },
+      reload: () => app.dispatch(RELOAD, 0),
+      home: () => { app.dispatch(HOME, 0); window.scrollTo({ top: 0, behavior: "smooth" }); },
+      back: () => app.dispatch(BACK, 0),
+    };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) window.ultraHome.tick(); });
+  </script>
+</body>
+</html>

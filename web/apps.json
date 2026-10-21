@@ -1,0 +1,84 @@
+{
+ "apps": [
+  {
+   "label": "Calculator",
+   "component": "com.example.calculator/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%23f59e0b%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EC%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Calendar",
+   "component": "com.example.calendar/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%233b82f6%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EC%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Camera",
+   "component": "com.example.camera/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2364748b%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EC%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Chrome",
+   "component": "com.example.chrome/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2322c55e%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EC%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Clock",
+   "component": "com.example.clock/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%230ea5e9%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EC%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Contacts",
+   "component": "com.example.contacts/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%236366f1%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EC%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Files",
+   "component": "com.example.files/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%23eab308%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EF%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Gmail",
+   "component": "com.example.gmail/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%23ef4444%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EG%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Maps",
+   "component": "com.example.maps/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2310b981%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EM%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Messages",
+   "component": "com.example.messages/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%238b5cf6%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EM%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Music",
+   "component": "com.example.music/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%23ec4899%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EM%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Phone",
+   "component": "com.example.phone/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2314b8a6%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EP%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Photos",
+   "component": "com.example.photos/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%23f97316%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EP%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Play Store",
+   "component": "com.example.playstore/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2306b6d4%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EP%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Settings",
+   "component": "com.example.settings/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2371717a%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3ES%3C/text%3E%3C/svg%3E"
+  },
+  {
+   "label": "Weather",
+   "component": "com.example.weather/.MainActivity",
+   "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2224%22%20r%3D%2224%22%20fill%3D%22%2338bdf8%22/%3E%3Ctext%20x%3D%2224%22%20y%3D%2231%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22600%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3EW%3C/text%3E%3C/svg%3E"
+  }
+ ]
+}

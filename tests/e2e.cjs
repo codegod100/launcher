@@ -178,5 +178,32 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.ok(await p.$(".page.dark"));
   console.log("ui ok");
 
+  // launcher: the Android home screen, against the demo apps.json
+  await p.goto(BASE + "/examples/launcher/");
+  await p.evaluate(() => localStorage.clear());
+  await p.reload();
+  await p.waitForSelector(".tile");
+  const names = () => p.$$eval(".tile .name", (ns) => ns.map((n) => n.textContent));
+  assert.equal((await names()).length, 16);
+  assert.match(await p.textContent(".clock .time"), /^\d{1,2}:\d\d$/);
+  await p.fill(".search input", "ca"); await tick();
+  assert.deepEqual(await names(), ["Calculator", "Calendar", "Camera"]);
+  await p.press(".search input", "Enter"); await tick();
+  assert.equal(await p.textContent("#toast"), "Open com.example.calculator/.MainActivity");
+  assert.equal(await p.inputValue(".search input"), "", "launching clears the search");
+  await p.click("text=Edit dock"); await tick();
+  await p.click(".tile:nth-child(4)", { force: true }); await p.click(".tile:nth-child(8)", { force: true }); await tick();
+  assert.equal(await p.$$eval(".tile.pinned", (ts) => ts.length), 2);
+  await p.click("text=Done"); await tick();
+  await p.reload(); await p.waitForSelector(".dock-app");
+  assert.deepEqual(await p.$$eval(".dock-app", (ds) => ds.map((d) => d.getAttribute("aria-label"))), ["Chrome", "Gmail"]);
+  await p.click(".dock-app:first-child"); await tick();
+  assert.equal(await p.textContent("#toast"), "Open com.example.chrome/.MainActivity");
+  await p.fill(".search input", "zzz"); await tick();
+  assert.equal(await p.textContent(".empty"), "No apps match.");
+  await p.evaluate(() => window.ultraHome.back()); await tick();
+  assert.equal((await names()).length, 16, "back clears the search");
+  console.log("launcher ok");
+
   await b.close();
 })().catch((e) => { console.error(e); process.exit(1); });

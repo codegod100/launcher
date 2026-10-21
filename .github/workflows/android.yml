@@ -1,0 +1,41 @@
+name: Android launcher
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", "examples/launcher/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", "examples/launcher/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ultra-launcher-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+      # Keep a "launcher-latest" prerelease with the newest APK, so a phone can download it directly.
+      - name: Publish the launcher-latest release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ultra-launcher.apk
+          gh release delete launcher-latest --yes --cleanup-tag || true
+          gh release create launcher-latest ultra-launcher.apk --prerelease --target "$GITHUB_SHA" \
+            --title "ultra launcher (latest build)" \
+            --notes "Debug-signed APK of android/ built from $GITHUB_SHA. Install it, press Home, and pick ultra Home."
