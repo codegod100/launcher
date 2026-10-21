@@ -111,30 +111,70 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.equal(await p.$$eval(".grid i", (cs) => cs.length), 2500);
   console.log("life ok");
 
-  // ui: component gallery
+  // ui: component gallery, every widget wired to live state
   await p.goto(BASE + "/examples/ui/");
+  await p.evaluate(() => localStorage.clear());
+  await p.reload();
   await p.waitForSelector(".card");
-  await p.fill(".input", "Ada"); await p.press(".input", "Enter"); await tick();
-  assert.match(await p.textContent(".stack p.muted"), /Saved Ada\./);
+  await p.click("text=Destructive"); await p.click("text=Large"); await tick();
+  assert.equal(await p.getAttribute("#preview", "class"), "btn destructive lg");
+  await p.click("#preview"); await p.click("#preview"); await tick();
+  assert.equal(await p.textContent(".preview .badge"), "2");
+  // profile: Save is disabled until there is a name and the terms are accepted
+  assert.ok(await p.$("#save[disabled]"));
+  await p.fill("input[placeholder='Ada Lovelace']", "Ada"); await tick();
+  assert.equal(await p.textContent(".hello-name"), "Ada");
+  assert.ok(await p.$("#save[disabled]"));
   await p.click("text=Accept terms"); await tick();
-  assert.equal(await p.getAttribute(".checkbox", "aria-checked"), "true");
-  await p.click("text=Email notifications"); await tick();
-  assert.equal(await p.getAttribute(".switch", "aria-checked"), "false");
-  await p.click("text=Password"); await tick();
-  assert.equal(await p.textContent("[role=tabpanel]"), "Change your password here.");
-  await p.click("text=Delete project"); await tick();
-  assert.ok(await p.$(".dialog"));
+  assert.ok(!(await p.$("#save[disabled]")));
+  await p.press("input[placeholder='Ada Lovelace']", "Enter"); await tick();
+  assert.match(await p.textContent(".toast"), /Saved Ada\./);
+  await p.waitForTimeout(2700);
+  assert.ok(!(await p.$(".toast")), "toast hides itself");
+  await p.click(".field >> text=Email notifications"); await tick();
+  assert.match(await p.textContent(".hello"), /muted/);
+  // tabs
+  await p.click("[role=tab] >> text=Password"); await tick();
+  await p.fill("input[type=password]", "abc"); await tick();
+  assert.equal(await p.textContent("[role=tabpanel] .badge"), "Weak");
+  await p.fill("input[type=password]", "correct horse"); await tick();
+  assert.equal(await p.textContent("[role=tabpanel] .badge"), "Strong");
+  await p.click("[role=tab] >> text=Billing"); await tick();
+  assert.equal(await p.textContent(".total"), "$36 / month");
+  await p.click("text=Yearly"); await p.click("[role=tabpanel] >> text=+"); await tick();
+  assert.equal(await p.textContent(".total"), "$480 / year");
+  // progress animation
+  await p.click("#play"); await p.waitForTimeout(400);
+  const lvl = Number(await p.textContent("#play + .badge"));
+  assert.ok(lvl > 30, "progress should advance");
+  await p.click("#play");
+  // table: search, filter, sort, select, delete with undo
+  const invs = () => p.$$eval("tbody td.mono", (ts) => ts.map((t) => t.textContent));
+  await p.fill("input[placeholder^=Search]", "pay"); await tick();
+  assert.deepEqual(await invs(), ["INV002", "INV005"]);
+  await p.fill("input[placeholder^=Search]", ""); await p.click('.toggle >> text="Pending"'); await tick();
+  assert.deepEqual(await invs(), ["INV002", "INV006"]);
+  await p.click('text="All"'); await p.click("#sort"); await tick();
+  assert.deepEqual(await invs(), ["INV004", "INV003", "INV001", "INV006", "INV002", "INV005"]);
+  assert.equal(await p.textContent("tfoot td.num"), "$1450.00");
+  await p.click("tbody td >> text=INV005"); await p.click("tbody tr:nth-child(6) button.badge"); await tick();
+  assert.equal(await p.textContent("tbody tr:nth-child(6) .badge"), "Pending");
+  assert.equal(await p.getAttribute("tbody tr:nth-child(6)", "aria-selected"), "true");
+  await p.click("#delete"); await tick();
   await p.keyboard.press("Escape"); await tick();
   assert.ok(!(await p.$(".dialog")), "Escape closes the dialog");
-  await p.click("text=Delete project"); await tick();
+  await p.click("#delete"); await tick();
   await p.click(".dialog-overlay", { position: { x: 10, y: 10 } }); await tick();
   assert.ok(!(await p.$(".dialog")), "backdrop closes the dialog");
-  await p.click("text=Delete project"); await tick();
+  await p.click("#delete"); await tick();
   await p.click(".dialog .btn.destructive"); await tick();
-  assert.ok(await p.$(".alert.destructive"));
-  await p.click("text=INV002"); await tick();
-  assert.equal(await p.getAttribute("tbody tr:nth-child(2)", "aria-selected"), "true");
+  assert.equal((await invs()).length, 5);
+  assert.ok(await p.$("#delete[disabled]"));
+  await p.click("text=Undo delete of INV005"); await tick();
+  assert.equal((await invs()).length, 6);
+  // theme persists
   await p.click("text=Dark"); await tick();
+  await p.reload(); await p.waitForSelector(".page");
   assert.ok(await p.$(".page.dark"));
   console.log("ui ok");
 
