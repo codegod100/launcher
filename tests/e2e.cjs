@@ -37,9 +37,27 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await p.click(".widget-list li:first-child"); await settle();
   assert.equal(await p.getAttribute(".widget-slot", "data-wid"), "100");
   assert.equal(await p.textContent(".widget-label"), "Clock");
-  // long press a home app: reorder
-  await longpress(".slots .tile:nth-child(2)");
+  // hold a home app and drag it: reorder
+  const drag = async (from, to) => {
+    const a = await p.locator(from).first().boundingBox(), z = await p.locator(to).first().boundingBox();
+    await p.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await p.mouse.down(); await p.waitForTimeout(650); await settle();
+    assert.ok(await p.$(".slots > .lifted"), "a long press lifts the slot");
+    await p.mouse.move(z.x + z.width / 2, z.y + z.height / 2, { steps: 5 }); await settle();
+    await p.mouse.up(); await settle();
+  };
+  await drag(".slots .tile:nth-child(2)", ".slots .tile:nth-child(1)");
+  assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
+  assert.ok(!(await p.$(".sheet")), "a drag doesn't open the menu");
+  assert.ok(!(await p.$(".slots > .lifted")));
+  await drag(".slots .tile:nth-child(1)", ".slots .tile:nth-child(3)");
+  assert.deepEqual(await homeApps(), ["Chrome", "Phone", "Gmail"]);
+  // hold without moving: the menu
+  await longpress(".slots .tile:nth-child(3)");
   await p.click(".sheet-item >> text=Move earlier"); await settle();
+  assert.deepEqual(await homeApps(), ["Chrome", "Gmail", "Phone"]);
+  await longpress(".slots .tile:nth-child(1)");
+  await p.click(".sheet-item >> text=Move later"); await settle();
   assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
   // swipe down opens the drawer (and takes the widget off screen), search, long press adds
   const swipe = (y0, y1) => p.evaluate(([y0, y1]) => {

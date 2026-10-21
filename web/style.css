@@ -58,6 +58,13 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
                border: 1px dashed rgb(255 255 255 / .3); }
 .widget-label { font-size: .875rem; opacity: .75; text-shadow: var(--shadow-text); }
 
+/* A slot picked up by a long press, while it is dragged (index.html moves it). */
+.slots > li { transition: transform .15s ease-out; }
+.slots > .lifted { z-index: 1; transform: scale(1.12); background: rgb(255 255 255 / .16);
+                   box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
+.slots.dragging > li:not(.lifted) { opacity: .8; }
+.slots.dragging .tile:active { background: none; }
+
 .hint, .empty { text-align: center; opacity: .85; text-shadow: var(--shadow-text); }
 .hint { margin-top: 30vh; padding: 0 2rem; font-size: .9rem; line-height: 1.5; }
 

@@ -113,7 +113,48 @@
 
     // Messages the shell and the gestures below send (keep in sync with app.py).
     const TICK = 1, RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
-          WIDGET_ADDED = 7, WIDGET_MENU = 8;
+          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36;
+
+    // Dragging a home slot. A long press lifts it (app.py marks it .lifted); moving the
+    // finger then slides it to the slot under the finger, and letting go drops it there.
+    // Letting go without moving opens its menu instead. Native widget views take their
+    // own touches, so the shell reports those moves through widgetDrag/widgetDrop.
+    let drag = null, dragged = false; // drag: { x, y, moved } from pointerdown
+    const slotAt = (x, y) => {
+      let best = -1, bestD = Infinity;
+      for (const li of document.querySelectorAll(".slots > li[data-slot]")) {
+        const r = li.getBoundingClientRect();
+        const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = +li.dataset.slot; }
+      }
+      return best;
+    };
+    const dragTo = (x, y) => {
+      const lifted = document.querySelector(".slots > .lifted");
+      if (!lifted) return;
+      const to = slotAt(x, y);
+      if (to >= 0 && to !== +lifted.dataset.slot) app.dispatch(DRAG_TO, to);
+    };
+    const drop = (moved) => {
+      if (document.querySelector(".slots > .lifted")) app.dispatch(DROP, moved ? 1 : 0);
+    };
+    addEventListener("pointerdown", (e) => {
+      drag = e.isPrimary && e.target.closest?.(".slots > li") ? { x: e.clientX, y: e.clientY, moved: false } : null;
+      dragged = false;
+    });
+    addEventListener("pointermove", (e) => {
+      if (!drag || !document.querySelector(".slots > .lifted")) return;
+      if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 10) return;
+      drag.moved = dragged = true;
+      dragTo(e.clientX, e.clientY);
+    });
+    addEventListener("pointerup", () => { if (drag) drop(drag.moved); drag = null; });
+    addEventListener("pointercancel", () => { if (drag) drop(drag.moved); drag = null; });
+    // Keep the page from scrolling under a lifted slot.
+    addEventListener("touchmove", (e) => {
+      if (drag && document.querySelector(".slots > .lifted") && e.cancelable) e.preventDefault();
+    }, { passive: false });
     window.ultraHome = {
       tick: () => { formats(); app.dispatch(TICK, 1); },
       reload: () => app.dispatch(RELOAD, 0),
@@ -121,6 +162,8 @@
       back: () => app.dispatch(BACK, 0),
       widgetAdded: (id) => app.dispatch(WIDGET_ADDED, id),
       widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
+      widgetDrag: (x, y) => { dragged = true; dragTo(x, y); },
+      widgetDrop: (moved) => drop(moved),
       place: () => { placed = ""; place(); },
       resetIcons: () => { iconSrc.clear(); asked.clear(); tries.clear();
         for (const img of document.querySelectorAll("img.icon")) img.__icon = undefined; },
@@ -137,7 +180,7 @@
       start = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
     }, { passive: true });
     addEventListener("touchend", (e) => {
-      if (!start) return;
+      if (!start || dragged || document.querySelector(".slots > .lifted")) { start = null; return; }
       const t = e.changedTouches[0], dx = t.clientX - start.x, dy = t.clientY - start.y;
       const quick = Date.now() - start.at < 700;
       start = null;

@@ -9,6 +9,8 @@ from ui import btn_open, input_open, alert
 
 # An Android home screen. The home starts blank: you add apps and widgets to it
 # with a long press. Swiping down opens the drawer with every app and a search.
+# A long press on a home app or widget picks it up: drag it to move it, or let go
+# without moving to get its menu (index.html does the dragging).
 #
 # The native shell (android/) serves this folder in a WebView, answers
 # apps.json and widgets.json, hosts the widgets as native views over the
@@ -68,7 +70,7 @@ BACK: Const[i32] = 4
 SWIPE_DOWN: Const[i32] = 5
 SWIPE_UP: Const[i32] = 6
 WIDGET_ADDED: Const[i32] = 7
-WIDGET_MENU: Const[i32] = 8
+WIDGET_MENU: Const[i32] = 8   # arg: widget id; a long press on a native widget lifts it
 LOADED: Const[i32] = 10
 WIDGETS_LOADED: Const[i32] = 11
 QUERY: Const[i32] = 12
@@ -81,7 +83,6 @@ OPEN_HOME: Const[i32] = 18     # arg: home slot
 ADD_HOME: Const[i32] = 19      # arg: row in the app list (long press in the drawer)
 TOGGLE_HOME: Const[i32] = 20   # arg: row in the app list (drawer in pick mode)
 MENU: Const[i32] = 21          # long press on the empty home
-ITEM_MENU: Const[i32] = 22     # arg: home slot
 CLOSE_SHEET: Const[i32] = 23
 PICK_APPS: Const[i32] = 24
 PICK_WIDGET: Const[i32] = 25
@@ -93,6 +94,9 @@ SETTINGS: Const[i32] = 30
 WALLPAPER: Const[i32] = 31
 NOTICE_DONE: Const[i32] = 32
 RECENTS: Const[i32] = 33
+LIFT: Const[i32] = 34          # arg: home slot (long press picks it up)
+DRAG_TO: Const[i32] = 35       # arg: home slot the lifted one is dragged over
+DROP: Const[i32] = 36          # arg: 1 if it was dragged, 0 if just held (opens its menu)
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 40
@@ -147,6 +151,7 @@ drawer: i32 = 0
 picking: i32 = 0     # drawer is in "add apps" mode: taps toggle home slots
 sheet: i32 = 0
 item: i32 = -1       # home slot the item sheet is about
+lifted: i32 = -1     # home slot picked up by a long press, being dragged
 pending: i32 = 0     # JSON handle of a request in flight
 
 
@@ -365,6 +370,17 @@ def swap_slots(a: i32, b: i32) -> None:
     save_home()
 
 
+def move_slot(a: i32, b: i32) -> None:
+    """Take slot a out and put it back at b, shifting the slots between."""
+    i: i32 = a
+    while i < b:
+        swap_slots(i, i + 1)
+        i += 1
+    while i > b:
+        swap_slots(i, i - 1)
+        i -= 1
+
+
 def slot_of_widget(wid: i32) -> i32:
     i: i32
     for i in range(nh):
@@ -374,16 +390,17 @@ def slot_of_widget(wid: i32) -> i32:
 
 
 def close_all() -> None:
-    global drawer, picking, sheet, item
+    global drawer, picking, sheet, item, lifted
     s_clear(query)
     drawer = 0
     picking = 0
     sheet = NONE
     item = -1
+    lifted = -1
 
 # ---- Update
 def update(msg: i32, arg: i32) -> None:
-    global loading, drawer, picking, sheet, item, pending, wloading, chosen
+    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted
     i: i32
     if msg == LOADED:
         load_apps(arg)
@@ -423,15 +440,23 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == MENU:
         haptic()
         sheet = SHEET_MENU
-    elif msg == ITEM_MENU:
-        haptic()
-        item = arg
-        sheet = SHEET_ITEM
+    elif msg == LIFT:
+        if drawer == 0 and sheet == NONE:
+            haptic()
+            lifted = arg
     elif msg == WIDGET_MENU:
         i = slot_of_widget(arg)
-        if i >= 0 and drawer == 0:
-            item = i
+        if i >= 0 and drawer == 0 and sheet == NONE:
+            lifted = i
+    elif msg == DRAG_TO:
+        if lifted >= 0 and arg >= 0 and arg < nh and arg != lifted:
+            move_slot(lifted, arg)
+            lifted = arg
+    elif msg == DROP:
+        if lifted >= 0 and arg == 0:
+            item = lifted
             sheet = SHEET_ITEM
+        lifted = -1
     elif msg == CLOSE_SHEET:
         sheet = NONE
         item = -1
@@ -487,7 +512,9 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == HOME:
         close_all()
     elif msg == BACK:
-        if sheet != NONE:
+        if lifted >= 0:
+            lifted = -1
+        elif sheet != NONE:
             sheet = NONE
             item = -1
         elif drawer == 1:
@@ -511,6 +538,8 @@ def view_home_slot(i: i32) -> None:
         el("li")
         key(hkey[i])
         cls("widget-slot")
+        cls_if("lifted", i == lifted)
+        attr_num("data-slot", i)
         s_set(scratch, "height:")
         s_add_num(scratch, hh[i])
         s_add(scratch, "px")
@@ -519,7 +548,7 @@ def view_home_slot(i: i32) -> None:
         # them while nothing covers the home screen.
         if drawer == 0 and sheet == NONE:
             attr_num("data-wid", hwid[i])
-        on_longpress(ITEM_MENU, i)
+        on_longpress(LIFT, i)
         el("span")
         cls("widget-label")
         text_ref(hstr[i])
@@ -532,8 +561,10 @@ def view_home_slot(i: i32) -> None:
     el("li")
     key(hkey[i])
     cls("tile")
+    cls_if("lifted", i == lifted)
+    attr_num("data-slot", i)
     on_click(OPEN_HOME, i)
-    on_longpress(ITEM_MENU, i)
+    on_longpress(LIFT, i)
     view_icon(icons[row])
     el("span")
     cls("name")
@@ -585,6 +616,7 @@ def view_home() -> None:
 
     el("ul")
     cls("slots")
+    cls_if("dragging", lifted >= 0)
     for i in range(nh):
         view_home_slot(i)
     end()

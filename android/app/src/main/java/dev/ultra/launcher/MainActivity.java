@@ -503,7 +503,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Widget views that report a long press to the page instead of to the widget. */
+    /**
+     * Widget views that report a long press to the page instead of to the widget. The press
+     * lifts the widget's slot; the moves and the release that follow go to the page as
+     * widgetDrag(x, y) in CSS px and widgetDrop(moved), so it can be dragged to a new place.
+     */
     static final class Host extends AppWidgetHost {
         Host(MainActivity a) { super(a, HOST_ID); }
 
@@ -517,11 +521,14 @@ public class MainActivity extends Activity {
         private final MainActivity home;
         private final int id;
         private float downX, downY;
-        private boolean longPressed;
+        private boolean longPressed, moved;
+        private final int[] webAt = new int[2];
         private final Runnable fire = new Runnable() {
             @Override public void run() {
                 longPressed = true;
+                moved = false;
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                setAlpha(.85f);
                 home.js("widgetMenu(" + id + ")");
             }
         };
@@ -550,14 +557,54 @@ public class MainActivity extends Activity {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     removeCallbacks(fire);
+                    if (longPressed) {
+                        drop(); // released before any move reached onTouchEvent
+                        return true;
+                    }
                     break;
             }
             return longPressed; // once fired, take the gesture away from the widget
         }
 
+        private void drop() {
+            longPressed = false;
+            setAlpha(1f);
+            home.js("widgetDrop(" + moved + ")");
+        }
+
         @Override
         public boolean onTouchEvent(MotionEvent e) {
-            return longPressed || super.onTouchEvent(e);
+            if (!longPressed) {
+                // Where no child took the press, its moves come here instead of through
+                // onInterceptTouchEvent; keep the gesture so they do.
+                int a = e.getActionMasked();
+                if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL
+                        || (a == MotionEvent.ACTION_MOVE && Math.hypot(e.getX() - downX, e.getY() - downY)
+                            > ViewConfiguration.get(getContext()).getScaledTouchSlop())) {
+                    removeCallbacks(fire);
+                }
+                return super.onTouchEvent(e) || a == MotionEvent.ACTION_DOWN;
+            }
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_MOVE:
+                    if (!moved && Math.hypot(e.getX() - downX, e.getY() - downY)
+                            > ViewConfiguration.get(getContext()).getScaledTouchSlop()) {
+                        moved = true;
+                    }
+                    if (moved) {
+                        // Raw screen coordinates: this view moves as the page reorders slots.
+                        float d = getResources().getDisplayMetrics().density;
+                        home.web.getLocationOnScreen(webAt);
+                        home.js("widgetDrag(" + Math.round((e.getRawX() - webAt[0]) / d) + ","
+                                + Math.round((e.getRawY() - webAt[1]) / d) + ")");
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    drop();
+                    break;
+            }
+            return true;
         }
     }
 
