@@ -34,6 +34,7 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
 .tile:active { background: rgb(255 255 255 / .12); }
 .icon { width: 3.25rem; height: 3.25rem; object-fit: contain; pointer-events: none;
         filter: drop-shadow(0 2px 4px rgb(0 0 0 / .3)); }
+.icon.missing { border-radius: 999px; background: rgb(255 255 255 / .18); object-position: -999px 0; }
 .name { max-width: 100%; font-size: .75rem; line-height: 1.2; text-align: center;
         text-shadow: var(--shadow-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

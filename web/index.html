@@ -81,6 +81,21 @@
       widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
       place: () => { placed = ""; place(); },
     };
+    // An icon that fails to load is retried twice with backoff, then drawn as a blank
+    // disc instead of the browser's broken-image box.
+    document.addEventListener("error", (e) => {
+      const img = e.target;
+      if (!(img instanceof HTMLImageElement) || !img.classList.contains("icon")) return;
+      const n = (img.__retries = (img.__retries || 0) + 1);
+      if (n > 2) { img.classList.add("missing"); return; }
+      setTimeout(() => {
+        const base = img.getAttribute("src").replace(/[?&]retry=\d+$/, "");
+        img.src = base + (base.includes("?") ? "&" : "?") + "retry=" + n;
+      }, 300 * n);
+    }, true);
+    document.addEventListener("load", (e) => {
+      if (e.target instanceof HTMLImageElement) e.target.classList.remove("missing");
+    }, true);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) window.ultraHome.tick(); });
     addEventListener("scroll", () => requestAnimationFrame(place), { passive: true });
     addEventListener("resize", () => requestAnimationFrame(place));

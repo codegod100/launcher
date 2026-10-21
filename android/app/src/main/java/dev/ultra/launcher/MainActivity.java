@@ -25,6 +25,7 @@ import android.os.Process;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.format.DateFormat;
+import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -240,21 +241,41 @@ public class MainActivity extends Activity {
         return new JSONObject().put("apps", apps).toString();
     }
 
+    // Icons are drawn one at a time: the WebView asks for a screenful at once on several
+    // threads, and some icon drawables don't survive being loaded and drawn concurrently.
+    private final Object iconLock = new Object();
+
     private byte[] iconPng(String c) {
         byte[] png = icons.get(c);
         if (png != null) return png;
+        synchronized (iconLock) {
+            png = icons.get(c);
+            if (png != null) return png;
+            try {
+                png = drawIcon(c);
+            } catch (RuntimeException | OutOfMemoryError e) {
+                Log.w("ultra", "icon for " + c, e);
+                return null;
+            }
+            if (png != null) icons.put(c, png);
+            return png;
+        }
+    }
+
+    private byte[] drawIcon(String c) {
         ComponentName cn = c == null ? null : ComponentName.unflattenFromString(c);
         if (cn == null) return null;
         LauncherActivityInfo info = launcher.resolveActivity(
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(cn), user);
         if (info == null) return null;
         int dpi = getResources().getDisplayMetrics().densityDpi;
-        png = toPng(info.getIcon(dpi), Math.round(ICON_DP * dpi / 160f));
-        icons.put(c, png);
-        return png;
+        Drawable d = info.getIcon(dpi);
+        if (d == null) d = getPackageManager().getDefaultActivityIcon();
+        return toPng(d, Math.round(ICON_DP * dpi / 160f));
     }
 
     private static byte[] toPng(Drawable d, int size) {
+        d = d.mutate(); // setBounds on a drawable shared with other callers would move theirs
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         d.setBounds(0, 0, size, size);
         d.draw(new Canvas(bmp));
@@ -299,14 +320,33 @@ public class MainActivity extends Activity {
         String k = "w:" + p;
         byte[] png = icons.get(k);
         if (png != null) return png;
-        AppWidgetProviderInfo w = provider(p);
-        if (w == null) return null;
-        int dpi = getResources().getDisplayMetrics().densityDpi;
-        Drawable d = w.loadIcon(this, dpi);
-        if (d == null) return null;
-        png = toPng(d, Math.round(ICON_DP * dpi / 160f));
-        icons.put(k, png);
-        return png;
+        synchronized (iconLock) {
+            AppWidgetProviderInfo w = provider(p);
+            if (w == null) return null;
+            int dpi = getResources().getDisplayMetrics().densityDpi;
+            Drawable d = null;
+            try {
+                d = w.loadIcon(this, dpi);
+            } catch (RuntimeException e) {
+                Log.w("ultra", "widget icon for " + p, e);
+            }
+            if (d == null) {
+                // Fall back to the app's own icon, then to the system default.
+                try {
+                    d = getPackageManager().getApplicationIcon(w.provider.getPackageName());
+                } catch (android.content.pm.PackageManager.NameNotFoundException | RuntimeException e) {
+                    d = getPackageManager().getDefaultActivityIcon();
+                }
+            }
+            try {
+                png = toPng(d, Math.round(ICON_DP * dpi / 160f));
+            } catch (RuntimeException | OutOfMemoryError e) {
+                Log.w("ultra", "drawing widget icon for " + p, e);
+                return null;
+            }
+            icons.put(k, png);
+            return png;
+        }
     }
 
     /** Bind a widget for provider p, then configure it if it asks to be; see onActivityResult. */
@@ -556,6 +596,7 @@ public class MainActivity extends Activity {
                         return respond(mime(name), getAssets().open(name));
                 }
             } catch (IOException | JSONException | RuntimeException e) {
+                Log.w("ultra", "serving " + path, e);
                 return notFound();
             }
         }
