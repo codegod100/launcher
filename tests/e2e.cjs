@@ -77,6 +77,7 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await swipe(200, 500);
   await p.waitForSelector(".drawer", { timeout: 2000 });
   assert.equal(await p.$$eval("[data-wid]", (ws) => ws.length), 0);
+  assert.ok(await p.$eval(".drawer input", (i) => i === document.activeElement), "opening the drawer focuses its search");
   await p.fill(".drawer input", "ma"); await settle();
   assert.deepEqual(await p.$$eval(".apps .name", (ns) => ns.map((n) => n.textContent)), ["Gmail", "Maps"]);
   await p.press(".drawer input", "Enter"); await settle();

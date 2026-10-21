@@ -35,6 +35,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.Window;
 import android.view.WindowInsets;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
@@ -749,6 +750,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void haptic() {
             main.post(() -> web.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
                     HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING));
+        }
+
+        /** The page focused the drawer's search box; show the keyboard for it. */
+        @JavascriptInterface public void showKeyboard() {
+            main.postDelayed(() -> {
+                web.requestFocus();
+                InputMethodManager imm = getSystemService(InputMethodManager.class);
+                if (imm != null) imm.showSoftInput(web, InputMethodManager.SHOW_IMPLICIT);
+            }, 50);
+        }
+
+        @JavascriptInterface public void hideKeyboard() {
+            main.post(() -> {
+                InputMethodManager imm = getSystemService(InputMethodManager.class);
+                if (imm != null) imm.hideSoftInputFromWindow(web.getWindowToken(), 0);
+            });
         }
 
         @JavascriptInterface public void openSettings() {

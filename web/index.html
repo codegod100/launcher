@@ -32,6 +32,8 @@
       openSettings: () => toast("Open system settings"),
       pickWallpaper: () => toast("Pick a wallpaper"),
       openRecents: () => toast("Show open windows"),
+      showKeyboard: () => {},
+      hideKeyboard: () => {},
       haptic: () => navigator.vibrate?.(10),
     };
     if (!window.Android) document.documentElement.classList.add("demo");
@@ -53,6 +55,24 @@
       if (handles !== excluded) { excluded = handles; host.excludeGestures?.(handles); }
     };
     let excluded = "[]";
+
+    // Opening the drawer puts the cursor in its search box and raises the keyboard
+    // (a WebView won't show it for a focus() the user didn't tap, so the shell does).
+    // Picking apps to add is for scrolling, so that stays keyboard-free.
+    let drawerOpen = false;
+    const watchDrawer = () => {
+      const d = document.querySelector(".drawer");
+      if (!!d === drawerOpen) return;
+      drawerOpen = !!d;
+      if (d) {
+        if (d.classList.contains("picking")) return;
+        d.querySelector(".drawer-head input")?.focus({ preventScroll: true });
+        host.showKeyboard?.();
+      } else {
+        document.activeElement?.blur?.();
+        host.hideKeyboard?.();
+      }
+    };
 
     // Icons: each <img class="icon" data-icon=KEY> gets its src from here. On a phone the
     // shell draws icons on its own thread and hands them back as data: URIs in batches
@@ -95,7 +115,7 @@
     window.ultraIcons = gotIcons; // the shell calls this before ultraHome exists, too
 
     const app = await mount("#app", "./app.wasm", {
-      onRender: () => { fillIcons(); place(); },
+      onRender: () => { fillIcons(); place(); watchDrawer(); },
       imports: ({ strs }) => ({
         launch: (h) => host.launch(strs[h]),
         app_info: (h) => host.appInfo(strs[h]),
