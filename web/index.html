@@ -54,8 +54,34 @@
       if (j !== placed) { placed = j; host.placeWidgets(j); }
     };
 
+    // Icons: each <img class="icon" data-icon=KEY> gets its src from here. On a phone the
+    // shell draws icons on its own thread and hands them back as data: URIs in batches
+    // (ultraIcons), so the WebView never loads icons through request interception.
+    // In a desktop browser the key is already a URL.
+    const iconSrc = new Map(), asked = new Set();
+    const setIcon = (img, src) => {
+      if (src) { img.src = src; img.classList.remove("missing"); } else img.classList.add("missing");
+    };
+    const fillIcons = () => {
+      const want = [];
+      for (const img of document.querySelectorAll("img.icon[data-icon]")) {
+        const k = img.dataset.icon;
+        if (img.__icon === k) continue;
+        if (iconSrc.has(k)) { img.__icon = k; setIcon(img, iconSrc.get(k)); }
+        else if (!asked.has(k)) { asked.add(k); want.push(k); }
+      }
+      if (!want.length) return;
+      if (host.loadIcons) host.loadIcons(JSON.stringify(want));
+      else gotIcons(Object.fromEntries(want.map((k) => [k, k])));
+    };
+    const gotIcons = (batch) => {
+      for (const k in batch) { iconSrc.set(k, batch[k]); asked.delete(k); }
+      fillIcons();
+    };
+    window.ultraIcons = gotIcons; // the shell calls this before ultraHome exists, too
+
     const app = await mount("#app", "./app.wasm", {
-      onRender: place,
+      onRender: () => { fillIcons(); place(); },
       imports: ({ strs }) => ({
         launch: (h) => host.launch(strs[h]),
         app_info: (h) => host.appInfo(strs[h]),
@@ -80,22 +106,9 @@
       widgetAdded: (id) => app.dispatch(WIDGET_ADDED, id),
       widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
       place: () => { placed = ""; place(); },
+      resetIcons: () => { iconSrc.clear(); asked.clear();
+        for (const img of document.querySelectorAll("img.icon")) img.__icon = undefined; },
     };
-    // An icon that fails to load is retried twice with backoff, then drawn as a blank
-    // disc instead of the browser's broken-image box.
-    document.addEventListener("error", (e) => {
-      const img = e.target;
-      if (!(img instanceof HTMLImageElement) || !img.classList.contains("icon")) return;
-      const n = (img.__retries = (img.__retries || 0) + 1);
-      if (n > 2) { img.classList.add("missing"); return; }
-      setTimeout(() => {
-        const base = img.getAttribute("src").replace(/[?&]retry=\d+$/, "");
-        img.src = base + (base.includes("?") ? "&" : "?") + "retry=" + n;
-      }, 300 * n);
-    }, true);
-    document.addEventListener("load", (e) => {
-      if (e.target instanceof HTMLImageElement) e.target.classList.remove("missing");
-    }, true);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) window.ultraHome.tick(); });
     addEventListener("scroll", () => requestAnimationFrame(place), { passive: true });
     addEventListener("resize", () => requestAnimationFrame(place));

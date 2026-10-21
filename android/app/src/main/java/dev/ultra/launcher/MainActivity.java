@@ -25,6 +25,7 @@ import android.os.Process;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.format.DateFormat;
+import android.util.Base64;
 import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -57,6 +58,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * The home screen activity. The UI is the ultra app in examples/launcher (LPython compiled
@@ -96,6 +99,7 @@ public class MainActivity extends Activity {
     private final UserHandle user = Process.myUserHandle();
     private final Map<String, byte[]> icons = new ConcurrentHashMap<>();
     private final Handler main = new Handler(Looper.getMainLooper());
+    private final ExecutorService iconThread = Executors.newSingleThreadExecutor();
 
     private final LauncherApps.Callback packages = new LauncherApps.Callback() {
         @Override public void onPackageRemoved(String pkg, UserHandle u) { reload(); }
@@ -180,6 +184,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         launcher.unregisterCallback(packages);
+        iconThread.shutdownNow();
         web.destroy();
         super.onDestroy();
     }
@@ -217,7 +222,43 @@ public class MainActivity extends Activity {
 
     private void reload() {
         icons.clear();
+        js("resetIcons()");
         js("reload()");
+    }
+
+    /**
+     * Draw the icons for these keys ("icon?c=COMP" or "wicon?p=PROV", as apps.json and
+     * widgets.json give them) on the icon thread, and hand them to the page as data: URIs,
+     * a few at a time, through ultraIcons({key: uri}). A key that can't be drawn gets "".
+     */
+    private void loadIcons(String json) {
+        List<String> keys = new ArrayList<>();
+        try {
+            JSONArray a = new JSONArray(json);
+            for (int i = 0; i < a.length(); i++) keys.add(a.getString(i));
+        } catch (JSONException e) {
+            return;
+        }
+        iconThread.execute(() -> {
+            JSONObject batch = new JSONObject();
+            for (int i = 0; i < keys.size(); i++) {
+                String k = keys.get(i);
+                byte[] png = null;
+                if (k.startsWith("icon?c=")) png = iconPng(Uri.decode(k.substring(7)));
+                else if (k.startsWith("wicon?p=")) png = widgetIconPng(Uri.decode(k.substring(8)));
+                try {
+                    batch.put(k, png == null ? ""
+                            : "data:image/png;base64," + Base64.encodeToString(png, Base64.NO_WRAP));
+                } catch (JSONException e) {
+                    continue;
+                }
+                if (batch.length() == 8 || i == keys.size() - 1) {
+                    String call = "window.ultraIcons && ultraIcons(" + batch + ")";
+                    main.post(() -> web.evaluateJavascript(call, null));
+                    batch = new JSONObject();
+                }
+            }
+        });
     }
 
     // ------------------------------------------------------------ apps
@@ -549,6 +590,10 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void placeWidgets(String json) {
             main.post(() -> MainActivity.this.placeWidgets(json));
+        }
+
+        @JavascriptInterface public void loadIcons(String keys) {
+            MainActivity.this.loadIcons(keys);
         }
 
         @JavascriptInterface public void haptic() {

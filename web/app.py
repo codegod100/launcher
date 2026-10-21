@@ -489,7 +489,7 @@ def view_icon(h: i32) -> None:
     cls("icon")
     attr("alt", "")
     attr("draggable", "false")
-    attr_ref("src", h)
+    attr_ref("data-icon", h)   # index.html turns this into a src
     end()
 
 
