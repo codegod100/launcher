@@ -1,6 +1,11 @@
 package dev.ultra.launcher;
 
 import android.app.Activity;
+import android.appwidget.AppWidgetHost;
+import android.appwidget.AppWidgetHostView;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetProviderInfo;
+import android.content.Context;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Intent;
@@ -20,7 +25,10 @@ import android.os.Process;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.format.DateFormat;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
@@ -30,6 +38,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -55,17 +64,31 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  *   apps.json       {"apps": [{"label", "component", "icon"}]}, every launchable activity
  *   icon?c=COMP     the activity's icon as a PNG
+ *   widgets.json    {"widgets": [{"label", "provider", "icon", "h"}]}, every widget provider
+ *   wicon?p=PROV    the provider's icon as a PNG
  *
- * and exposes window.Android (launch, appInfo, openSettings, pickWallpaper, is24Hour) for
- * the app's @jscall imports. Package changes, the home button, back and resume are passed
- * to the page as window.ultraHome.reload() / home() / back() / tick().
+ * and exposes window.Android (launch, appInfo, addWidget, removeWidget, placeWidgets,
+ * openSettings, pickWallpaper, haptic, is24Hour) for the app's @jscall imports.
+ *
+ * Widgets are real AppWidgetHostViews in a layer above the WebView. The page reports where
+ * its live widget slots are (placeWidgets), and this class moves the views there. Package
+ * changes, the home button, back, resume, a new widget and a long press on a widget reach
+ * the page as window.ultraHome.reload() / home() / back() / tick() / widgetAdded(id) /
+ * widgetMenu(id).
  */
 public class MainActivity extends Activity {
     static final String HOST = "appassets.androidplatform.net";
     static final String ORIGIN = "https://" + HOST + "/";
     static final int ICON_DP = 56;
+    static final int HOST_ID = 0x0171;
+    static final int REQ_BIND = 1, REQ_CONFIGURE = 2;
 
     private WebView web;
+    private FrameLayout widgetLayer;
+    private AppWidgetManager widgets;
+    private AppWidgetHost widgetHost;
+    private final Map<Integer, AppWidgetHostView> widgetViews = new HashMap<>();
+    private int pendingWidget = -1;
     private boolean ready;
     private int insetTop, insetBottom; // CSS px
     private LauncherApps launcher;
@@ -86,6 +109,8 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         launcher = getSystemService(LauncherApps.class);
         launcher.registerCallback(packages, main);
+        widgets = AppWidgetManager.getInstance(this);
+        widgetHost = new Host(this);
 
         Window w = getWindow();
         if (Build.VERSION.SDK_INT >= 30) {
@@ -101,6 +126,9 @@ public class MainActivity extends Activity {
         ready = false;
         web = new WebView(this);
         web.setBackgroundColor(Color.TRANSPARENT);
+        // Long presses are the page's (on_longpress); no native text selection.
+        web.setOnLongClickListener(v -> true);
+        web.setHapticFeedbackEnabled(false);
         web.setVerticalScrollBarEnabled(false);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings s = web.getSettings();
@@ -127,8 +155,25 @@ public class MainActivity extends Activity {
             pushInsets();
             return insets;
         });
-        setContentView(web);
+        widgetViews.clear();
+        widgetLayer = new FrameLayout(this);
+        FrameLayout root = new FrameLayout(this);
+        root.addView(web);
+        root.addView(widgetLayer);
+        setContentView(root);
         web.loadUrl(ORIGIN + "index.html");
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        widgetHost.startListening();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        widgetHost.stopListening();
     }
 
     @Override
@@ -166,7 +211,7 @@ public class MainActivity extends Activity {
         if (!ready) return;
         web.evaluateJavascript("(s => { s.setProperty('--inset-top', '" + insetTop + "px');"
                 + " s.setProperty('--inset-bottom', '" + insetBottom + "px'); })"
-                + "(document.documentElement.style)", null);
+                + "(document.documentElement.style); window.ultraHome && ultraHome.place()", null);
     }
 
     private void reload() {
@@ -204,17 +249,224 @@ public class MainActivity extends Activity {
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(cn), user);
         if (info == null) return null;
         int dpi = getResources().getDisplayMetrics().densityDpi;
-        Drawable d = info.getIcon(dpi);
-        int size = Math.round(ICON_DP * dpi / 160f);
+        png = toPng(info.getIcon(dpi), Math.round(ICON_DP * dpi / 160f));
+        icons.put(c, png);
+        return png;
+    }
+
+    private static byte[] toPng(Drawable d, int size) {
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         d.setBounds(0, 0, size, size);
         d.draw(new Canvas(bmp));
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
         bmp.recycle();
-        png = out.toByteArray();
-        icons.put(c, png);
+        return out.toByteArray();
+    }
+
+    // ------------------------------------------------------------ widgets
+
+    private String widgetsJson() throws JSONException {
+        List<AppWidgetProviderInfo> list = new ArrayList<>(widgets.getInstalledProvidersForProfile(user));
+        Map<AppWidgetProviderInfo, String> labels = new HashMap<>();
+        for (AppWidgetProviderInfo w : list) labels.put(w, w.loadLabel(getPackageManager()));
+        Collator by = Collator.getInstance();
+        list.sort((a, b) -> by.compare(labels.get(a), labels.get(b)));
+        float d = getResources().getDisplayMetrics().density;
+        JSONArray out = new JSONArray();
+        for (AppWidgetProviderInfo w : list) {
+            String p = w.provider.flattenToShortString();
+            int h = Math.round(w.minHeight / d);
+            out.put(new JSONObject()
+                    .put("label", labels.get(w))
+                    .put("provider", p)
+                    .put("icon", "wicon?p=" + Uri.encode(p))
+                    .put("h", Math.max(80, Math.min(h + 16, 420))));
+        }
+        return new JSONObject().put("widgets", out).toString();
+    }
+
+    private AppWidgetProviderInfo provider(String p) {
+        ComponentName cn = p == null ? null : ComponentName.unflattenFromString(p);
+        if (cn == null) return null;
+        for (AppWidgetProviderInfo w : widgets.getInstalledProvidersForProfile(user)) {
+            if (w.provider.equals(cn)) return w;
+        }
+        return null;
+    }
+
+    private byte[] widgetIconPng(String p) {
+        String k = "w:" + p;
+        byte[] png = icons.get(k);
+        if (png != null) return png;
+        AppWidgetProviderInfo w = provider(p);
+        if (w == null) return null;
+        int dpi = getResources().getDisplayMetrics().densityDpi;
+        Drawable d = w.loadIcon(this, dpi);
+        if (d == null) return null;
+        png = toPng(d, Math.round(ICON_DP * dpi / 160f));
+        icons.put(k, png);
         return png;
+    }
+
+    /** Bind a widget for provider p, then configure it if it asks to be; see onActivityResult. */
+    private void addWidget(String p) {
+        AppWidgetProviderInfo w = provider(p);
+        if (w == null) return;
+        int id = widgetHost.allocateAppWidgetId();
+        pendingWidget = id;
+        if (widgets.bindAppWidgetIdIfAllowed(id, user, w.provider, null)) {
+            configureWidget(id);
+        } else {
+            Intent i = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, w.provider)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, user);
+            try {
+                startActivityForResult(i, REQ_BIND);
+            } catch (ActivityNotFoundException e) {
+                dropPending();
+            }
+        }
+    }
+
+    private void configureWidget(int id) {
+        AppWidgetProviderInfo w = widgets.getAppWidgetInfo(id);
+        if (w != null && w.configure != null) {
+            try {
+                widgetHost.startAppWidgetConfigureActivityForResult(this, id, 0, REQ_CONFIGURE, null);
+                return;
+            } catch (ActivityNotFoundException | SecurityException e) {
+                // Fall through: add it unconfigured, as most launchers do.
+            }
+        }
+        widgetReady(id);
+    }
+
+    private void widgetReady(int id) {
+        pendingWidget = -1;
+        js("widgetAdded(" + id + ")");
+    }
+
+    private void dropPending() {
+        if (pendingWidget != -1) widgetHost.deleteAppWidgetId(pendingWidget);
+        pendingWidget = -1;
+    }
+
+    @Override
+    protected void onActivityResult(int req, int result, Intent data) {
+        super.onActivityResult(req, result, data);
+        if (pendingWidget == -1) return;
+        if (result != RESULT_OK) {
+            dropPending();
+        } else if (req == REQ_BIND) {
+            configureWidget(pendingWidget);
+        } else if (req == REQ_CONFIGURE) {
+            widgetReady(pendingWidget);
+        }
+    }
+
+    private void removeWidget(int id) {
+        AppWidgetHostView v = widgetViews.remove(id);
+        if (v != null) widgetLayer.removeView(v);
+        widgetHost.deleteAppWidgetId(id);
+    }
+
+    /** Lay widget views over the page's live slots: [[id, x, y, w, h], ...] in CSS px. */
+    private void placeWidgets(String json) {
+        float d = getResources().getDisplayMetrics().density;
+        Map<Integer, int[]> want = new HashMap<>();
+        try {
+            JSONArray a = new JSONArray(json);
+            for (int i = 0; i < a.length(); i++) {
+                JSONArray r = a.getJSONArray(i);
+                want.put(r.getInt(0), new int[] {
+                        Math.round(r.getInt(1) * d), Math.round(r.getInt(2) * d),
+                        Math.round(r.getInt(3) * d), Math.round(r.getInt(4) * d),
+                        r.getInt(3), r.getInt(4)});
+            }
+        } catch (JSONException e) {
+            return;
+        }
+        for (Map.Entry<Integer, AppWidgetHostView> e : widgetViews.entrySet()) {
+            if (!want.containsKey(e.getKey())) e.getValue().setVisibility(View.GONE);
+        }
+        for (Map.Entry<Integer, int[]> e : want.entrySet()) {
+            int id = e.getKey();
+            int[] r = e.getValue();
+            AppWidgetHostView v = widgetViews.get(id);
+            if (v == null) {
+                AppWidgetProviderInfo info = widgets.getAppWidgetInfo(id);
+                if (info == null) continue; // the provider was uninstalled
+                v = widgetHost.createView(this, id, info);
+                widgetViews.put(id, v);
+                widgetLayer.addView(v);
+            }
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(r[2], r[3]);
+            lp.leftMargin = r[0];
+            lp.topMargin = r[1];
+            v.setLayoutParams(lp);
+            v.setVisibility(View.VISIBLE);
+            v.updateAppWidgetSize(new Bundle(), r[4], r[5], r[4], r[5]);
+        }
+    }
+
+    /** Widget views that report a long press to the page instead of to the widget. */
+    static final class Host extends AppWidgetHost {
+        Host(MainActivity a) { super(a, HOST_ID); }
+
+        @Override
+        protected AppWidgetHostView onCreateView(Context context, int id, AppWidgetProviderInfo info) {
+            return new WidgetView((MainActivity) context, id);
+        }
+    }
+
+    static final class WidgetView extends AppWidgetHostView {
+        private final MainActivity home;
+        private final int id;
+        private float downX, downY;
+        private boolean longPressed;
+        private final Runnable fire = new Runnable() {
+            @Override public void run() {
+                longPressed = true;
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                home.js("widgetMenu(" + id + ")");
+            }
+        };
+
+        WidgetView(MainActivity home, int id) {
+            super(home);
+            this.home = home;
+            this.id = id;
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    longPressed = false;
+                    downX = e.getX();
+                    downY = e.getY();
+                    postDelayed(fire, ViewConfiguration.getLongPressTimeout());
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.hypot(e.getX() - downX, e.getY() - downY)
+                            > ViewConfiguration.get(getContext()).getScaledTouchSlop()) {
+                        removeCallbacks(fire);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    removeCallbacks(fire);
+                    break;
+            }
+            return longPressed; // once fired, take the gesture away from the widget
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            return longPressed || super.onTouchEvent(e);
+        }
     }
 
     private void start(String component) {
@@ -247,6 +499,23 @@ public class MainActivity extends Activity {
             });
         }
 
+        @JavascriptInterface public void addWidget(String provider) {
+            main.post(() -> MainActivity.this.addWidget(provider));
+        }
+
+        @JavascriptInterface public void removeWidget(int id) {
+            main.post(() -> MainActivity.this.removeWidget(id));
+        }
+
+        @JavascriptInterface public void placeWidgets(String json) {
+            main.post(() -> MainActivity.this.placeWidgets(json));
+        }
+
+        @JavascriptInterface public void haptic() {
+            main.post(() -> web.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
+                    HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING));
+        }
+
         @JavascriptInterface public void openSettings() {
             main.post(() -> startIntent(new Intent(Settings.ACTION_SETTINGS)));
         }
@@ -273,6 +542,12 @@ public class MainActivity extends Activity {
                     case "/apps.json":
                         return respond("application/json",
                                 new ByteArrayInputStream(appsJson().getBytes(StandardCharsets.UTF_8)));
+                    case "/widgets.json":
+                        return respond("application/json",
+                                new ByteArrayInputStream(widgetsJson().getBytes(StandardCharsets.UTF_8)));
+                    case "/wicon":
+                        byte[] wpng = widgetIconPng(u.getQueryParameter("p"));
+                        return wpng == null ? notFound() : respond("image/png", new ByteArrayInputStream(wpng));
                     case "/icon":
                         byte[] png = iconPng(u.getQueryParameter("c"));
                         return png == null ? notFound() : respond("image/png", new ByteArrayInputStream(png));
@@ -299,6 +574,7 @@ public class MainActivity extends Activity {
         @Override
         public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
             // The renderer was killed (e.g. under memory pressure): start over with a new WebView.
+            for (AppWidgetHostView v : widgetViews.values()) widgetLayer.removeView(v);
             web.destroy();
             createWebView();
             return true;

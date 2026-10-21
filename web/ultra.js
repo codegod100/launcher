@@ -124,6 +124,7 @@ export async function mount(root, url, opts = {}) {
     on_input: (m) => setEv("input", [m, EVENT]),
     on_enter: (m, a) => setEv("enter", [m, a]),
     on_escape: (m, a) => setEv("escape", [m, a]),
+    on_longpress: (m, a) => setEv("longpress", [m, a]),
 
     after: (ms, m, a) => setTimeout(() => dispatch(m, a), ms),
     frame: (m, a) => { frameQ.push(m, a); schedule(); },
@@ -379,6 +380,28 @@ export async function mount(root, url, opts = {}) {
   on("input", "input");
   on("keydown", "enter", (e) => e.key === "Enter" && !e.isComposing);
   on("keydown", "escape", (e) => e.key === "Escape");
+
+  // Long press: hold a pointer still for 500 ms. The click that ends the press is
+  // swallowed, and the browser's own context menu is suppressed where a handler exists.
+  let press = null, pressed = false;
+  const unpress = () => { if (press) { clearTimeout(press.t); press = null; } };
+  root.addEventListener("pointerdown", (e) => {
+    pressed = false;
+    unpress();
+    if (e.button > 0) return;
+    const h = find(e.target, "longpress");
+    if (!h) return;
+    press = { x: e.clientX, y: e.clientY,
+              t: setTimeout(() => { press = null; pressed = true; dispatch(h[0], h[1]); }, 500) };
+  });
+  root.addEventListener("pointermove", (e) => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) unpress();
+  });
+  for (const t of ["pointerup", "pointercancel", "pointerleave"]) root.addEventListener(t, unpress);
+  root.addEventListener("click", (e) => {
+    if (pressed) { pressed = false; e.stopImmediatePropagation(); e.preventDefault(); }
+  }, true);
+  root.addEventListener("contextmenu", (e) => { if (find(e.target, "longpress")) e.preventDefault(); });
 
   // Run module-level code (which calls init()), then first render.
   ex.__main__global_stmts();

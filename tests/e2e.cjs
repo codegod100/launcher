@@ -178,31 +178,70 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.ok(await p.$(".page.dark"));
   console.log("ui ok");
 
-  // launcher: the Android home screen, against the demo apps.json
+  // launcher: the Android home screen, against the demo apps.json and widgets.json
+  const settle = () => p.waitForTimeout(250); // renders land on the next frame, which can lag here
+  await p.emulateMedia({ reducedMotion: "reduce" }); // no sliding drawer under the pointer
   await p.goto(BASE + "/examples/launcher/");
   await p.evaluate(() => localStorage.clear());
   await p.reload();
-  await p.waitForSelector(".tile");
-  const names = () => p.$$eval(".tile .name", (ns) => ns.map((n) => n.textContent));
-  assert.equal((await names()).length, 16);
+  await p.waitForSelector(".hint");
   assert.match(await p.textContent(".clock .time"), /^\d{1,2}:\d\d$/);
-  await p.fill(".search input", "ca"); await tick();
-  assert.deepEqual(await names(), ["Calculator", "Calendar", "Camera"]);
-  await p.press(".search input", "Enter"); await tick();
-  assert.equal(await p.textContent("#toast"), "Open com.example.calculator/.MainActivity");
-  assert.equal(await p.inputValue(".search input"), "", "launching clears the search");
-  await p.click("text=Edit dock"); await tick();
-  await p.click(".tile:nth-child(4)", { force: true }); await p.click(".tile:nth-child(8)", { force: true }); await tick();
-  assert.equal(await p.$$eval(".tile.pinned", (ts) => ts.length), 2);
-  await p.click("text=Done"); await tick();
-  await p.reload(); await p.waitForSelector(".dock-app");
-  assert.deepEqual(await p.$$eval(".dock-app", (ds) => ds.map((d) => d.getAttribute("aria-label"))), ["Chrome", "Gmail"]);
-  await p.click(".dock-app:first-child"); await tick();
-  assert.equal(await p.textContent("#toast"), "Open com.example.chrome/.MainActivity");
-  await p.fill(".search input", "zzz"); await tick();
-  assert.equal(await p.textContent(".empty"), "No apps match.");
-  await p.evaluate(() => window.ultraHome.back()); await tick();
-  assert.equal((await names()).length, 16, "back clears the search");
+  const longpress = async (sel) => {
+    const r = await p.locator(sel).first().boundingBox();
+    await p.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+    await p.mouse.down(); await p.waitForTimeout(650); await p.mouse.up(); await settle();
+  };
+  const homeApps = () => p.$$eval(".slots .name", (ns) => ns.map((n) => n.textContent));
+  // long press on the blank home: add apps through the drawer's pick mode
+  await longpress(".hint");
+  await p.click(".sheet-item >> text=Add apps"); await settle();
+  for (const i of [4, 8, 12]) await p.click(`.apps .tile:nth-child(${i})`);
+  await settle();
+  assert.equal(await p.$$eval(".apps .tile.on", (ts) => ts.length), 3);
+  await p.click(".drawer-head >> text=Done"); await settle();
+  assert.deepEqual(await homeApps(), ["Chrome", "Gmail", "Phone"]);
+  // add a widget
+  await longpress(".clock");
+  await p.click(".sheet-item >> text=Add widget");
+  await p.waitForSelector(".widget-list li");
+  await p.click(".widget-list li:first-child"); await settle();
+  assert.equal(await p.getAttribute(".widget-slot", "data-wid"), "100");
+  assert.equal(await p.textContent(".widget-label"), "Clock");
+  // long press a home app: reorder
+  await longpress(".slots .tile:nth-child(2)");
+  await p.click(".sheet-item >> text=Move earlier"); await settle();
+  assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
+  // swipe down opens the drawer (and takes the widget off screen), search, long press adds
+  const swipe = (y0, y1) => p.evaluate(([y0, y1]) => {
+    const at = (y) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y });
+    dispatchEvent(new TouchEvent("touchstart", { touches: [at(y0)], changedTouches: [at(y0)] }));
+    dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [at(y1)] }));
+  }, [y0, y1]);
+  await swipe(200, 500);
+  await p.waitForSelector(".drawer", { timeout: 2000 });
+  assert.equal(await p.$$eval("[data-wid]", (ws) => ws.length), 0);
+  await p.fill(".drawer input", "ma"); await settle();
+  assert.deepEqual(await p.$$eval(".apps .name", (ns) => ns.map((n) => n.textContent)), ["Gmail", "Maps"]);
+  await p.press(".drawer input", "Enter"); await settle();
+  assert.equal(await p.textContent("#toast"), "Open com.example.gmail/.MainActivity");
+  assert.ok(!(await p.$(".drawer")), "launching closes the drawer");
+  await swipe(200, 500);
+  await p.waitForSelector(".drawer .tile", { timeout: 2000 });
+  await longpress(".apps .tile:first-child");
+  assert.equal(await p.textContent(".notice"), "Added to home");
+  await swipe(600, 200);
+  await p.waitForSelector(".drawer", { state: "detached", timeout: 2000 }); // swipe up closes it
+  assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone", "Calculator"]);
+  // persisted; tap launches; remove
+  await p.reload(); await p.waitForSelector(".slots .tile");
+  assert.equal(await p.$$eval(".slots > li", (ls) => ls.length), 5);
+  await p.click(".slots .tile:first-child"); await settle();
+  assert.equal(await p.textContent("#toast"), "Open com.example.gmail/.MainActivity");
+  await longpress(".widget-slot");
+  await p.click(".sheet-item >> text=Remove widget"); await settle();
+  assert.ok(!(await p.$(".widget-slot")));
+  await p.evaluate(() => { window.ultraHome.reload(); }); await settle();
+  assert.equal(await p.$$eval(".slots > li", (ls) => ls.length), 4);
   console.log("launcher ok");
 
   await b.close();

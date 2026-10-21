@@ -25,8 +25,8 @@ android {
     }
 
     androidResources {
-        // app.py is the LPython source and apps.json is the browser demo's stand-in.
-        ignoreAssetsPattern = "!app.py:!apps.json:!__pycache__:!.*"
+        // app.py is the LPython source; apps.json and widgets.json are the browser demo's stand-ins.
+        ignoreAssetsPattern = "!app.py:!apps.json:!widgets.json:!__pycache__:!.*"
     }
 
     buildTypes {

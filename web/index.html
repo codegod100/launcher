@@ -13,18 +13,24 @@
   <script type="module">
     import { mount } from "./ultra.js";
 
-    // On a phone, MainActivity.java adds window.Android and serves apps.json.
-    // In a desktop browser the demo apps.json is served and these stand-ins run.
+    // On a phone, MainActivity.java adds window.Android, serves apps.json and
+    // widgets.json, and draws widgets over the slots reported by place().
+    // In a desktop browser the demo JSON files are served and these stand-ins run.
     const toast = (s) => {
       const t = document.getElementById("toast");
       t.textContent = s; t.classList.add("show");
       clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 1600);
     };
+    let demoWidget = 100;
     const host = window.Android || {
       launch: (c) => toast("Open " + c),
       appInfo: (c) => toast("App info for " + c),
+      addWidget: () => setTimeout(() => window.ultraHome.widgetAdded(demoWidget++), 0),
+      removeWidget: () => {},
+      placeWidgets: () => {},
       openSettings: () => toast("Open system settings"),
       pickWallpaper: () => toast("Pick a wallpaper"),
+      haptic: () => navigator.vibrate?.(10),
       is24Hour: () => false,
     };
     if (!window.Android) document.documentElement.classList.add("demo");
@@ -37,26 +43,66 @@
     };
     formats();
 
+    // Tell the shell where the live widget slots are (CSS px, viewport-relative).
+    let placed = "";
+    const place = () => {
+      const slots = [...document.querySelectorAll(".widget-slot[data-wid]")].map((s) => {
+        const r = s.getBoundingClientRect();
+        return [+s.dataset.wid, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+      });
+      const j = JSON.stringify(slots);
+      if (j !== placed) { placed = j; host.placeWidgets(j); }
+    };
+
     const app = await mount("#app", "./app.wasm", {
+      onRender: place,
       imports: ({ strs }) => ({
         launch: (h) => host.launch(strs[h]),
         app_info: (h) => host.appInfo(strs[h]),
+        add_widget: (h) => host.addWidget(strs[h]),
+        remove_widget: (id) => host.removeWidget(id),
         open_settings: () => host.openSettings(),
         pick_wallpaper: () => host.pickWallpaper(),
+        haptic: () => host.haptic(),
         clock_time: (h) => { strs[h] = fmtTime.format(new Date()).replace(/\s?[AP]M$/i, ""); },
         clock_date: (h) => { strs[h] = fmtDate.format(new Date()); },
       }),
     });
 
-    // Messages the native side sends (keep in sync with app.py).
-    const TICK = 11, RELOAD = 12, HOME = 13, BACK = 14;
+    // Messages the shell and the gestures below send (keep in sync with app.py).
+    const TICK = 1, RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
+          WIDGET_ADDED = 7, WIDGET_MENU = 8;
     window.ultraHome = {
       tick: () => { formats(); app.dispatch(TICK, 1); },
       reload: () => app.dispatch(RELOAD, 0),
       home: () => { app.dispatch(HOME, 0); window.scrollTo({ top: 0, behavior: "smooth" }); },
       back: () => app.dispatch(BACK, 0),
+      widgetAdded: (id) => app.dispatch(WIDGET_ADDED, id),
+      widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
+      place: () => { placed = ""; place(); },
     };
     document.addEventListener("visibilitychange", () => { if (!document.hidden) window.ultraHome.tick(); });
+    addEventListener("scroll", () => requestAnimationFrame(place), { passive: true });
+    addEventListener("resize", () => requestAnimationFrame(place));
+
+    // Swipe down on the home screen opens the drawer; swipe up closes it once its
+    // list is scrolled to the end (or doesn't scroll).
+    let start = null;
+    addEventListener("touchstart", (e) => {
+      const t = e.touches[0];
+      start = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
+    }, { passive: true });
+    addEventListener("touchend", (e) => {
+      if (!start) return;
+      const t = e.changedTouches[0], dx = t.clientX - start.x, dy = t.clientY - start.y;
+      const quick = Date.now() - start.at < 700;
+      start = null;
+      if (!quick || Math.abs(dy) < 60 || Math.abs(dx) > Math.abs(dy)) return;
+      if (document.querySelector(".sheet")) return;
+      const list = document.querySelector(".drawer .apps");
+      if (dy > 0 && !list && window.scrollY <= 0) app.dispatch(SWIPE_DOWN, 0);
+      else if (dy < 0 && list && list.scrollTop + list.clientHeight >= list.scrollHeight - 2) app.dispatch(SWIPE_UP, 0);
+    }, { passive: true });
   </script>
 </body>
 </html>
