@@ -107,6 +107,10 @@ SHEET_ITEM: Const[i32] = 2
 SHEET_WIDGETS: Const[i32] = 3
 
 # ---- Model
+# Every module-level array is i32[512], even where HOME_CAP or WCAP is smaller:
+# ultra's build hands LPython's array allocations to the globals in an order that
+# doesn't match, so arrays of different sizes overlapped (rows past 256 of comps
+# wrote over icons, and wlabels was 40 slots long). With one size, any pairing is safe.
 # Installed apps, as parallel columns of string handles, sorted by label.
 labels: i32[512] = empty(512, dtype=int32)
 comps: i32[512] = empty(512, dtype=int32)
@@ -115,18 +119,18 @@ n: i32 = 0
 # The home screen, in order. An app slot keeps its component name in hstr;
 # a widget slot keeps the widget's label there, its host id in hwid and its
 # height in CSS px in hh. hkey is a stable key for the DOM diff.
-hkind: i32[40] = empty(40, dtype=int32)
-hstr: i32[40] = empty(40, dtype=int32)
-hwid: i32[40] = empty(40, dtype=int32)
-hh: i32[40] = empty(40, dtype=int32)
-hkey: i32[40] = empty(40, dtype=int32)
+hkind: i32[512] = empty(512, dtype=int32)
+hstr: i32[512] = empty(512, dtype=int32)
+hwid: i32[512] = empty(512, dtype=int32)
+hh: i32[512] = empty(512, dtype=int32)
+hkey: i32[512] = empty(512, dtype=int32)
 nh: i32 = 0
 next_key: i32 = 1
 # Widget providers, for the picker.
-wlabels: i32[256] = empty(256, dtype=int32)
-wprovs: i32[256] = empty(256, dtype=int32)
-wicons: i32[256] = empty(256, dtype=int32)
-wheights: i32[256] = empty(256, dtype=int32)
+wlabels: i32[512] = empty(512, dtype=int32)
+wprovs: i32[512] = empty(512, dtype=int32)
+wicons: i32[512] = empty(512, dtype=int32)
+wheights: i32[512] = empty(512, dtype=int32)
 nw: i32 = 0
 wloading: i32 = 0
 chosen: i32 = -1    # widget row being added
