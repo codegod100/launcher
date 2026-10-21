@@ -1,17 +1,29 @@
-name: Android launcher
+name: Launcher
 
 on:
   push:
     branches: [main]
-    paths: ["android/**", "examples/launcher/**", ".github/workflows/android.yml"]
   pull_request:
-    paths: ["android/**", "examples/launcher/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+      - uses: prefix-dev/setup-pixi@v0.9.3
+      - name: Fetch Playwright
+        run: pixi run install-playwright
+      - name: Build the wasm and run the browser test
+        run: pixi run test
+      - name: Check the committed web/app.wasm is up to date
+        run: git diff --exit-code --stat web/
+
   apk:
     runs-on: ubuntu-latest
     steps:

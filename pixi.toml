@@ -1,0 +1,17 @@
+[workspace]
+name = "launcher"
+description = "Android home-screen launcher written as an ultra app (LPython -> wasm)"
+channels = ["https://conda.anaconda.org/conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = "3.12.*"
+lpython = "0.22.*"
+nodejs = ">=22"
+
+# The ultra framework is the git submodule in ultra/ (`git submodule update --init`).
+[tasks]
+build = { cmd = "python ultra/tools/ultra.py build web/app.py", description = "Compile web/app.py to web/app.wasm" }
+serve = { cmd = "python ultra/tools/ultra.py serve web", description = "Serve the launcher's browser demo on http://localhost:8000" }
+install-playwright = { cmd = "npm install --no-save --no-package-lock playwright@1.56.1 && npx playwright install chromium", description = "Fetch Playwright and Chromium for the browser test" }
+test = { cmd = "python tests/run.py", depends-on = ["build"], description = "Build, then run the browser test against a local server" }

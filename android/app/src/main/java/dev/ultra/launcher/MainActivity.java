@@ -62,7 +62,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * The home screen activity. The UI is the ultra app in examples/launcher (LPython compiled
+ * The home screen activity. The UI is the ultra app in web/ (LPython compiled
  * to wasm), packaged as assets and served to a transparent WebView from a virtual https
  * origin. This class answers the two dynamic URLs the app fetches:
  *

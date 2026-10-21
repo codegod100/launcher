@@ -20,8 +20,8 @@ android {
     }
 
     sourceSets {
-        // The home screen UI is the ultra app in examples/launcher, served from assets.
-        main.assets.srcDirs = ["$rootDir/../examples/launcher"]
+        // The home screen UI is the ultra app in web/, served from assets.
+        main.assets.srcDirs = ["$rootDir/../web"]
     }
 
     androidResources {
