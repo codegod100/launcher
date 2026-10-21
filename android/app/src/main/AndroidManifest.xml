@@ -21,7 +21,6 @@
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
             android:clearTaskOnLaunch="true"
-            android:resumeWhilePaused="true"
             android:excludeFromRecents="true"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density">
