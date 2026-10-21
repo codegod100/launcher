@@ -72,7 +72,7 @@ import java.util.concurrent.Executors;
  *   wicon?p=PROV    the provider's icon as a PNG
  *
  * and exposes window.Android (launch, appInfo, addWidget, removeWidget, placeWidgets,
- * openSettings, pickWallpaper, haptic, is24Hour) for the app's @jscall imports.
+ * openSettings, pickWallpaper, openRecents, haptic, is24Hour) for the app's @jscall imports.
  *
  * Widgets are real AppWidgetHostViews in a layer above the WebView. The page reports where
  * its live widget slots are (placeWidgets), and this class moves the views there. Package
@@ -567,6 +567,22 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * Show Recents through RecentsService. Until the user has turned the service on, take
+     * them to Accessibility settings, with our service highlighted where Settings supports it.
+     */
+    private void openRecents() {
+        if (RecentsService.showRecents()) return;
+        Toast.makeText(this, "Turn on \"" + getString(R.string.recents_service_label)
+                + "\" to show open windows", Toast.LENGTH_LONG).show();
+        String me = new ComponentName(this, RecentsService.class).flattenToString();
+        Bundle args = new Bundle();
+        args.putString(":settings:fragment_args_key", me);
+        startIntent(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                .putExtra(":settings:fragment_args_key", me)
+                .putExtra(":settings:show_fragment_args", args));
+    }
+
     /** window.Android: called from the page's @jscall imports on a binder thread. */
     final class Bridge {
         @JavascriptInterface public void launch(String component) {
@@ -607,6 +623,10 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void pickWallpaper() {
             main.post(() -> startIntent(Intent.createChooser(new Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper")));
+        }
+
+        @JavascriptInterface public void openRecents() {
+            main.post(MainActivity.this::openRecents);
         }
 
         @JavascriptInterface public boolean is24Hour() {

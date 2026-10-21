@@ -31,5 +31,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Opens Recents for the Windows button; the user turns it on in Accessibility. -->
+        <service
+            android:name=".RecentsService"
+            android:label="@string/recents_service_label"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/recents_service" />
+        </service>
     </application>
 </manifest>

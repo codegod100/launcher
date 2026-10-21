@@ -30,6 +30,7 @@
       placeWidgets: () => {},
       openSettings: () => toast("Open system settings"),
       pickWallpaper: () => toast("Pick a wallpaper"),
+      openRecents: () => toast("Show open windows"),
       haptic: () => navigator.vibrate?.(10),
       is24Hour: () => false,
     };
@@ -89,6 +90,7 @@
         remove_widget: (id) => host.removeWidget(id),
         open_settings: () => host.openSettings(),
         pick_wallpaper: () => host.pickWallpaper(),
+        open_recents: () => host.openRecents(),
         haptic: () => host.haptic(),
         clock_time: (h) => { strs[h] = fmtTime.format(new Date()).replace(/\s?[AP]M$/i, ""); },
         clock_date: (h) => { strs[h] = fmtDate.format(new Date()); },

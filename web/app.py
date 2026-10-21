@@ -42,6 +42,11 @@ def pick_wallpaper() -> None:
     pass
 
 @jscall
+def open_recents() -> None:
+    """Show the system's list of open windows (Recents)."""
+    pass
+
+@jscall
 def haptic() -> None:
     pass
 
@@ -87,6 +92,7 @@ INFO: Const[i32] = 29          # arg: home slot
 SETTINGS: Const[i32] = 30
 WALLPAPER: Const[i32] = 31
 NOTICE_DONE: Const[i32] = 32
+RECENTS: Const[i32] = 33
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 40
@@ -462,6 +468,8 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == WALLPAPER:
         pick_wallpaper()
         sheet = NONE
+    elif msg == RECENTS:
+        open_recents()
     elif msg == NOTICE_DONE:
         if arg == notice_gen:
             s_clear(notice)
@@ -530,6 +538,25 @@ def view_home_slot(i: i32) -> None:
     end()
 
 
+def view_panel() -> None:
+    """The panel under the clock: shortcuts to system surfaces."""
+    el("section")
+    cls("panel")
+    attr("aria-label", "Shortcuts")
+    el("button")
+    cls("panel-btn")
+    on_click(RECENTS, 0)
+    el("span")
+    cls("windows-glyph")
+    attr("aria-hidden", "true")
+    end()
+    el("span")
+    text("Windows")
+    end()
+    end()
+    end()
+
+
 def view_home() -> None:
     i: i32
     div("home")
@@ -549,6 +576,8 @@ def view_home() -> None:
     text_ref(today)
     end()
     end()
+
+    view_panel()
 
     el("ul")
     cls("slots")

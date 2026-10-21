@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ultra Home</string>
+    <string name="recents_service_label">ultra Home window list</string>
+    <string name="recents_service_summary">Lets the home screen\'s Windows button open Recents</string>
+    <string name="recents_service_description">Turn this on so the Windows button on the ultra Home screen can show your open windows (Recents). Android only lets accessibility services open Recents. This service reads nothing on screen and does nothing else.</string>
 </resources>
