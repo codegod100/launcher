@@ -18,9 +18,11 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: true
+      # No pixi.lock is committed yet (the cloud dev sandbox can't reach prefix.dev to make one).
       - uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          cache: false
+          locked: false
       # Playwright's browser download hangs while unpacking under pixi's Node 26, so fetch
       # Chromium with the runner's own Node; the test itself still runs in the pixi env.
       - uses: actions/setup-node@v5

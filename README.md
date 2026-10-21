@@ -12,13 +12,12 @@ The **Windows** button uses an accessibility service (`RecentsService`, which on
 
 - `web/` is the UI: `app.py` is the ultra app and `app.wasm` its committed build, with `index.html`, `style.css` and the `ultra.js` / `ui.css` runtime the build copies in. `apps.json` and `widgets.json` are demo data for desktop browsers.
 - `android/` is a small native shell (Java, no dependencies) that serves `web/` to a transparent WebView over the wallpaper. It answers `apps.json` from `LauncherApps` and `widgets.json` from the installed widget providers, hands icons to the page through the `window.Android` bridge, and draws real `AppWidgetHostView`s over the slots the page reports.
-- `ultra/` is the ultra framework, as a git submodule.
+- The ultra framework comes from the `ultra` conda package on [prefix.dev/nandi-testing](https://prefix.dev/channels/nandi-testing), which pixi installs.
 - `tests/e2e.cjs` is a Playwright test of the browser demo.
 
 ## Build
 
 ```sh
-git submodule update --init
 pixi run build                          # web/app.py -> web/app.wasm
 pixi run install-playwright && pixi run test
 cd android && ./gradlew assembleDebug   # needs JDK 17 and the Android SDK
@@ -26,4 +25,4 @@ cd android && ./gradlew assembleDebug   # needs JDK 17 and the Android SDK
 
 `pixi run serve` serves `web/` on http://localhost:8000. In a desktop browser the launcher runs against the demo JSON files, shows a toast instead of launching, and draws widgets as labelled placeholders. Click the bar at the top to open the drawer.
 
-To pick up a newer ultra, update the submodule (`cd ultra && git pull origin main`), rebuild, and commit `ultra` together with the rebuilt `web/` files.
+Every push to ultra's main publishes a new `ultra` package. To pick it up, run `pixi update ultra`, rebuild, and commit the rebuilt `web/` files.
