@@ -15,10 +15,10 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await p.evaluate(() => localStorage.clear());
   await p.reload();
   await p.waitForSelector(".hint");
-  assert.match(await p.textContent(".clock .time"), /^\d{1,2}:\d\d$/);
-  const longpress = async (sel) => {
+  assert.ok(!(await p.$(".clock")), "home has no built-in clock");
+  const longpress = async (sel, fy = 0.5) => {
     const r = await p.locator(sel).first().boundingBox();
-    await p.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+    await p.mouse.move(r.x + r.width / 2, r.y + r.height * fy);
     await p.mouse.down(); await p.waitForTimeout(650); await p.mouse.up(); await settle();
   };
   const homeApps = () => p.$$eval(".slots .name", (ns) => ns.map((n) => n.textContent));
@@ -30,8 +30,8 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.equal(await p.$$eval(".apps .tile.on", (ts) => ts.length), 3);
   await p.click(".drawer-head >> text=Done"); await settle();
   assert.deepEqual(await homeApps(), ["Chrome", "Gmail", "Phone"]);
-  // add a widget
-  await longpress(".clock");
+  // add a widget: long press on blank home, below the apps
+  await longpress(".home", 0.95);
   await p.click(".sheet-item >> text=Add widget");
   await p.waitForSelector(".widget-list li");
   // search the picker by widget name and by the app it comes from

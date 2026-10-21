@@ -26,7 +26,6 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.UserHandle;
 import android.provider.Settings;
-import android.text.format.DateFormat;
 import android.util.Base64;
 import android.util.Log;
 import android.util.SizeF;
@@ -75,13 +74,13 @@ import java.util.concurrent.Executors;
  *   wicon?p=PROV    the provider's icon as a PNG
  *
  * and exposes window.Android (launch, appInfo, addWidget, removeWidget, placeWidgets,
- * widgetLimits, excludeGestures, openSettings, pickWallpaper, openRecents, haptic, is24Hour)
+ * widgetLimits, excludeGestures, openSettings, pickWallpaper, openRecents, haptic)
  * for the app's @jscall imports and index.html.
  *
  * Widgets are real AppWidgetHostViews in a layer above the WebView. The page reports where
  * its live widget slots are (placeWidgets), and this class moves the views there. Package
- * changes, the home button, back, resume, a new widget and a long press on a widget reach
- * the page as window.ultraHome.reload() / home() / back() / tick() / widgetAdded(id) /
+ * changes, the home button, back, a new widget and a long press on a widget reach
+ * the page as window.ultraHome.reload() / home() / back() / widgetAdded(id) /
  * widgetMenu(id).
  */
 public class MainActivity extends Activity {
@@ -201,12 +200,6 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         js("home()");
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        js("tick()");
     }
 
     // A home screen has nowhere to go back to; let the page clear its search or edit mode.
@@ -768,10 +761,6 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void openRecents() {
             main.post(MainActivity.this::openRecents);
-        }
-
-        @JavascriptInterface public boolean is24Hour() {
-            return DateFormat.is24HourFormat(MainActivity.this);
         }
     }
 

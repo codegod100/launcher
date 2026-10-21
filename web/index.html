@@ -33,17 +33,8 @@
       pickWallpaper: () => toast("Pick a wallpaper"),
       openRecents: () => toast("Show open windows"),
       haptic: () => navigator.vibrate?.(10),
-      is24Hour: () => false,
     };
     if (!window.Android) document.documentElement.classList.add("demo");
-
-    let fmtTime, fmtDate;
-    const formats = () => {
-      fmtTime = new Intl.DateTimeFormat(undefined,
-        { hour: "numeric", minute: "2-digit", hourCycle: host.is24Hour() ? "h23" : "h12" });
-      fmtDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
-    };
-    formats();
 
     // Tell the shell where the live widget slots are (CSS px, viewport-relative).
     let placed = "";
@@ -114,13 +105,11 @@
         pick_wallpaper: () => host.pickWallpaper(),
         open_recents: () => host.openRecents(),
         haptic: () => host.haptic(),
-        clock_time: (h) => { strs[h] = fmtTime.format(new Date()).replace(/\s?[AP]M$/i, ""); },
-        clock_date: (h) => { strs[h] = fmtDate.format(new Date()); },
       }),
     });
 
     // Messages the shell and the gestures below send (keep in sync with app.py).
-    const TICK = 1, RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
+    const RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
           WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40;
 
     // Dragging a home slot. A long press lifts it (app.py marks it .lifted); moving the
@@ -220,7 +209,6 @@
     addEventListener("touchmove", (e) => { if (rs && e.cancelable) e.preventDefault(); }, { passive: false });
 
     window.ultraHome = {
-      tick: () => { formats(); app.dispatch(TICK, 1); },
       reload: () => app.dispatch(RELOAD, 0),
       home: () => { app.dispatch(HOME, 0); window.scrollTo({ top: 0, behavior: "smooth" }); },
       back: () => app.dispatch(BACK, 0),
@@ -232,7 +220,6 @@
       resetIcons: () => { iconSrc.clear(); asked.clear(); tries.clear();
         for (const img of document.querySelectorAll("img.icon")) img.__icon = undefined; },
     };
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) window.ultraHome.tick(); });
     addEventListener("scroll", () => requestAnimationFrame(place), { passive: true });
     addEventListener("resize", () => requestAnimationFrame(place));
 

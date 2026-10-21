@@ -54,18 +54,7 @@ def open_recents() -> None:
 def haptic() -> None:
     pass
 
-@jscall
-def clock_time(dst: i32) -> None:
-    """Write the local time ("15:04") into dst."""
-    pass
-
-@jscall
-def clock_date(dst: i32) -> None:
-    """Write the local date ("Tuesday, October 21") into dst."""
-    pass
-
-# ---- Msg (index.html and MainActivity.java send TICK through WIDGET_MENU)
-TICK: Const[i32] = 1
+# ---- Msg (index.html and MainActivity.java send RELOAD through WIDGET_MENU)
 RELOAD: Const[i32] = 2
 HOME: Const[i32] = 3
 BACK: Const[i32] = 4
@@ -151,8 +140,6 @@ chosen: i32 = -1    # widget row being added
 
 query: i32 = 0
 wquery: i32 = 0     # widget picker search
-now: i32 = 0
-today: i32 = 0
 err: i32 = 0
 notice: i32 = 0
 notice_gen: i32 = 0
@@ -168,14 +155,12 @@ pending: i32 = 0     # JSON handle of a request in flight
 
 
 def init() -> None:
-    global query, wquery, now, today, err, notice, scratch, nh, next_key, pending
+    global query, wquery, err, notice, scratch, nh, next_key, pending
     i: i32
     h: i32
     k: i32
     query = s_new()
     wquery = s_new()
-    now = s_new()
-    today = s_new()
     err = s_new()
     notice = s_new()
     scratch = s_new()
@@ -194,9 +179,6 @@ def init() -> None:
             nh += 1
         else:
             s_free(h)
-    clock_time(now)
-    clock_date(today)
-    after(5000, TICK, 0)
     pending = http_get("apps.json", LOADED)
 
 
@@ -562,11 +544,6 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == NOTICE_DONE:
         if arg == notice_gen:
             s_clear(notice)
-    elif msg == TICK:
-        clock_time(now)
-        clock_date(today)
-        if arg == 0:
-            after(5000, TICK, 0)
     elif msg == RELOAD:
         pending = http_get("apps.json", LOADED)
     elif msg == HOME:
@@ -675,7 +652,7 @@ def view_home_slot(i: i32) -> None:
 
 
 def view_panel() -> None:
-    """The panel under the clock: shortcuts to system surfaces."""
+    """The panel at the top of home: shortcuts to system surfaces."""
     el("section")
     cls("panel")
     attr("aria-label", "Shortcuts")
@@ -703,16 +680,6 @@ def view_home() -> None:
     cls("pull")
     attr("aria-label", "All apps")
     on_click(OPEN_DRAWER, 0)
-    end()
-
-    el("header")
-    cls("clock")
-    div("time")
-    text_ref(now)
-    end()
-    div("date")
-    text_ref(today)
-    end()
     end()
 
     view_panel()
