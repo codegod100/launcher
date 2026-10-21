@@ -97,6 +97,9 @@ RECENTS: Const[i32] = 33
 LIFT: Const[i32] = 34          # arg: home slot (long press picks it up)
 DRAG_TO: Const[i32] = 35       # arg: home slot the lifted one is dragged over
 DROP: Const[i32] = 36          # arg: 1 if it was dragged, 0 if just held (opens its menu)
+WQUERY: Const[i32] = 37        # widget picker search
+WCLEAR: Const[i32] = 38
+CHOOSE_FIRST_WIDGET: Const[i32] = 39
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 40
@@ -134,12 +137,14 @@ next_key: i32 = 1
 wlabels: i32[512] = empty(512, dtype=int32)
 wprovs: i32[512] = empty(512, dtype=int32)
 wicons: i32[512] = empty(512, dtype=int32)
+wapps: i32[512] = empty(512, dtype=int32)    # label of the app the widget comes from
 wheights: i32[512] = empty(512, dtype=int32)
 nw: i32 = 0
 wloading: i32 = 0
 chosen: i32 = -1    # widget row being added
 
 query: i32 = 0
+wquery: i32 = 0     # widget picker search
 now: i32 = 0
 today: i32 = 0
 err: i32 = 0
@@ -156,11 +161,12 @@ pending: i32 = 0     # JSON handle of a request in flight
 
 
 def init() -> None:
-    global query, now, today, err, notice, scratch, nh, next_key, pending
+    global query, wquery, now, today, err, notice, scratch, nh, next_key, pending
     i: i32
     h: i32
     k: i32
     query = s_new()
+    wquery = s_new()
     now = s_new()
     today = s_new()
     err = s_new()
@@ -258,6 +264,7 @@ def load_widgets(doc: i32) -> None:
         s_free(wlabels[i])
         s_free(wprovs[i])
         s_free(wicons[i])
+        s_free(wapps[i])
     nw = 0
     if j_ok(doc) == 0:
         j_free(doc)
@@ -271,9 +278,11 @@ def load_widgets(doc: i32) -> None:
         wlabels[nw] = s_new()
         wprovs[nw] = s_new()
         wicons[nw] = s_new()
+        wapps[nw] = s_new()
         ok = j_str(row, "label", wlabels[nw])
         ok = j_str(row, "provider", wprovs[nw])
         ok = j_str(row, "icon", wicons[nw])
+        ok = j_str(row, "app", wapps[nw])
         wheights[nw] = j_int(row, "h")
         j_free(row)
         nw += 1
@@ -301,6 +310,18 @@ def home_of(row: i32) -> i32:
 
 def matches(i: i32) -> bool:
     return s_has(labels[i], query) == 1
+
+
+def widget_matches(i: i32) -> bool:
+    return s_has(wlabels[i], wquery) == 1 or s_has(wapps[i], wquery) == 1
+
+
+def first_widget_match() -> i32:
+    i: i32
+    for i in range(nw):
+        if widget_matches(i):
+            return i
+    return -1
 
 
 def first_match() -> i32:
@@ -410,6 +431,10 @@ def update(msg: i32, arg: i32) -> None:
         s_copy(query, arg)
     elif msg == CLEAR:
         s_clear(query)
+    elif msg == WQUERY:
+        s_copy(wquery, arg)
+    elif msg == WCLEAR:
+        s_clear(wquery)
     elif msg == OPEN_DRAWER or msg == SWIPE_DOWN:
         if sheet == NONE:
             drawer = 1
@@ -466,15 +491,20 @@ def update(msg: i32, arg: i32) -> None:
         picking = 1
     elif msg == PICK_WIDGET:
         sheet = SHEET_WIDGETS
+        s_clear(wquery)
         wloading = 1
         pending = http_get("widgets.json", WIDGETS_LOADED)
-    elif msg == CHOOSE_WIDGET:
-        if nh < HOME_CAP:
-            chosen = arg
-            add_widget(wprovs[arg])
-        else:
-            say("The home screen is full")
-        sheet = NONE
+    elif msg == CHOOSE_WIDGET or msg == CHOOSE_FIRST_WIDGET:
+        i = arg
+        if msg == CHOOSE_FIRST_WIDGET:
+            i = first_widget_match()
+        if i >= 0:
+            if nh < HOME_CAP:
+                chosen = i
+                add_widget(wprovs[i])
+            else:
+                say("The home screen is full")
+            sheet = NONE
     elif msg == WIDGET_ADDED:
         if chosen >= 0 and nh < HOME_CAP:
             push_slot(WIDGET, s_dup(wlabels[chosen]), arg, wheights[chosen])
@@ -702,6 +732,7 @@ def sheet_btn(s: str, msg: i32, arg: i32) -> None:
 def view_sheet() -> None:
     i: i32
     row: i32
+    shown: i32 = 0
     el("div")
     cls("sheet-overlay")
     on_click(CLOSE_SHEET, 0)
@@ -754,18 +785,38 @@ def view_sheet() -> None:
             cls("empty")
             text("No widgets installed.")
             end()
+        else:
+            input_open("Search widgets", wquery, WQUERY)
+            cls("widget-search")
+            attr("type", "search")
+            attr("enterkeyhint", "go")
+            on_enter(CHOOSE_FIRST_WIDGET, 0)
+            on_escape(WCLEAR, 0)
+            end()
         el("ul")
         cls("widget-list")
         for i in range(nw):
-            el("li")
-            key(i + 1)
-            on_click(CHOOSE_WIDGET, i)
-            view_icon(wicons[i])
-            el("span")
-            text_ref(wlabels[i])
-            end()
-            end()
+            if widget_matches(i):
+                shown += 1
+                el("li")
+                key(i + 1)
+                on_click(CHOOSE_WIDGET, i)
+                view_icon(wicons[i])
+                el("span")
+                cls("widget-name")
+                text_ref(wlabels[i])
+                if s_len(wapps[i]) > 0 and s_eq(wapps[i], wlabels[i]) == 0:
+                    el("small")
+                    text_ref(wapps[i])
+                    end()
+                end()
+                end()
         end()
+        if wloading == 0 and nw > 0 and shown == 0:
+            el("p")
+            cls("empty")
+            text("No widgets match.")
+            end()
     end()
 
 

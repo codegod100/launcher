@@ -34,6 +34,15 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await longpress(".clock");
   await p.click(".sheet-item >> text=Add widget");
   await p.waitForSelector(".widget-list li");
+  // search the picker by widget name and by the app it comes from
+  const widgetNames = () => p.$$eval(".widget-list .widget-name", (ns) => ns.map((n) => n.firstChild.textContent));
+  await p.fill(".widget-search", "cal"); await settle();
+  assert.deepEqual(await widgetNames(), ["Calendar"]);
+  await p.fill(".widget-search", "goo"); await settle();
+  assert.deepEqual(await widgetNames(), ["Weather"]);
+  await p.fill(".widget-search", "zzz"); await settle();
+  assert.equal(await p.textContent(".sheet .empty"), "No widgets match.");
+  await p.fill(".widget-search", ""); await settle();
   await p.click(".widget-list li:first-child"); await settle();
   assert.equal(await p.getAttribute(".widget-slot", "data-wid"), "100");
   assert.equal(await p.textContent(".widget-label"), "Clock");

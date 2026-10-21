@@ -11,6 +11,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -68,7 +69,7 @@ import java.util.concurrent.Executors;
  *
  *   apps.json       {"apps": [{"label", "component", "icon"}]}, every launchable activity
  *   icon?c=COMP     the activity's icon as a PNG
- *   widgets.json    {"widgets": [{"label", "provider", "icon", "h"}]}, every widget provider
+ *   widgets.json    {"widgets": [{"label", "app", "provider", "icon", "h"}]}, every widget provider
  *   wicon?p=PROV    the provider's icon as a PNG
  *
  * and exposes window.Android (launch, appInfo, addWidget, removeWidget, placeWidgets,
@@ -352,11 +353,22 @@ public class MainActivity extends Activity {
             int h = Math.round(w.minHeight / d);
             out.put(new JSONObject()
                     .put("label", labels.get(w))
+                    .put("app", appLabel(w.provider.getPackageName()))
                     .put("provider", p)
                     .put("icon", "wicon?p=" + Uri.encode(p))
                     .put("h", Math.max(80, Math.min(h + 16, 420))));
         }
         return new JSONObject().put("widgets", out).toString();
+    }
+
+    /** The label of the app a widget comes from, for the picker's search. */
+    private String appLabel(String pkg) {
+        try {
+            PackageManager pm = getPackageManager();
+            return pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+        } catch (PackageManager.NameNotFoundException e) {
+            return "";
+        }
     }
 
     private AppWidgetProviderInfo provider(String p) {
