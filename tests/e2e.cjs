@@ -115,7 +115,7 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await p.mouse.up(); await settle();
   const [w1, h1] = await size();
   assert.ok(w1 < w0 && Math.abs(w1 - (2 * tile.width + 8)) < 3, `two columns wide: ${w1} (tile ${tile.width})`);
-  assert.equal(h1, 2 * 64 + 8, "snapped to two whole rows of tiles");
+  assert.equal(h1, 2 * 60 + 8, "snapped to two whole rows of tiles");
   assert.ok(await p.$(".widget-slot.resizing"), "letting go of a handle keeps the handles");
   await p.click(".resize-bar >> text=Done"); await settle();
   assert.ok(!(await p.$(".resize-handle")));
@@ -132,7 +132,7 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await p.mouse.move(first.x + first.width / 2, first.y + first.height / 2, { steps: 8 }); await settle();
   await p.mouse.up(); await settle();
   assert.equal((await order())[0], "W", "dragged to the front");
-  // the apps flow into the cells beside it: a 2x2 widget in 5 columns leaves room for all four
+  // the apps flow into the cells beside it: a 2x2 widget leaves room for all four
   const beside = await p.$eval(".widget-slot", (w) => {
     const r = w.getBoundingClientRect();
     return [...document.querySelectorAll(".slots .tile")].filter((t) => {
