@@ -43,7 +43,8 @@
     const place = () => {
       const slots = [...document.querySelectorAll(".widget-slot[data-wid]")].map((s) => {
         const r = s.getBoundingClientRect();
-        return [+s.dataset.wid, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+        return [+s.dataset.wid, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height),
+                s.classList.contains("resizing") ? 1 : 0]; // its body moves it instead of taking touches
       });
       const j = JSON.stringify(slots);
       if (j !== placed) { placed = j; host.placeWidgets(j); }
@@ -130,12 +131,14 @@
 
     // Messages the shell and the gestures below send (keep in sync with app.py).
     const RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
-          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40;
+          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40, GRAB = 42;
 
     // Dragging a home slot. A long press lifts it (app.py marks it .lifted); moving the
     // finger then slides it to the slot under the finger, and letting go drops it there.
-    // Letting go without moving opens its menu instead. Native widget views take their
-    // own touches, so the shell reports those moves through widgetDrag/widgetDrop.
+    // Letting go without moving opens its menu instead. A widget showing resize handles
+    // needs no long press: pressing its body picks it up right away (GRAB), and it keeps
+    // its handles when let go. Native widget views take their own touches, so the shell
+    // reports those through widgetGrab/widgetDrag/widgetDrop.
     let drag = null, dragged = false; // drag: { x, y, moved } from pointerdown
     const slotAt = (x, y) => {
       let best = -1, bestD = Infinity;
@@ -156,6 +159,12 @@
     const drop = (moved) => {
       if (document.querySelector(".slots > .lifted")) app.dispatch(DROP, moved ? 1 : 0);
     };
+    let grabbed = false;
+    const grab = (li) => { grabbed = true; app.dispatch(GRAB, +li.dataset.slot); };
+    addEventListener("pointerdown", (e) => {
+      const li = e.isPrimary && !e.target.closest?.(".resize-handle") && e.target.closest?.(".slots > li.resizing");
+      if (li) grab(li);
+    }, true);
     addEventListener("pointerdown", (e) => {
       drag = e.isPrimary && e.target.closest?.(".slots > li") ? { x: e.clientX, y: e.clientY, moved: false } : null;
       dragged = false;
@@ -220,10 +229,10 @@
       host.haptic();
       app.dispatch(RESIZE, (cols >= n ? 0 : cols) * 4096 + h);
     }, true);
-    const endResize = () => { if (rs) { rs = null; swallowClick = true; setTimeout(() => swallowClick = false, 0); } };
+    const endResize = () => { if (rs || grabbed) { rs = null; grabbed = false; swallowClick = true; setTimeout(() => swallowClick = false, 0); } };
     addEventListener("pointerup", endResize, true);
     addEventListener("pointercancel", endResize, true);
-    addEventListener("click", (e) => { // the click that ends a handle drag isn't a tap beside the widget
+    addEventListener("click", (e) => { // the click that ends a handle drag or a move isn't a tap beside the widget
       if (swallowClick || e.target.closest?.(".resize-handle")) { swallowClick = false; e.stopPropagation(); e.preventDefault(); }
     }, true);
     addEventListener("touchmove", (e) => { if (rs && e.cancelable) e.preventDefault(); }, { passive: false });
@@ -234,6 +243,8 @@
       back: () => app.dispatch(BACK, 0),
       widgetAdded: (id) => app.dispatch(WIDGET_ADDED, id),
       widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
+      widgetGrab: (id) => { const li = document.querySelector(`.widget-slot.resizing[data-wid="${id}"]`);
+        if (li) app.dispatch(GRAB, +li.dataset.slot); },
       widgetDrag: (x, y) => { dragged = true; dragTo(x, y); },
       widgetDrop: (moved) => drop(moved),
       place: () => { placed = ""; place(); },

@@ -12,7 +12,8 @@ from ui import btn_open, input_open, alert
 # A long press on a home app or widget picks it up: drag it to move it, or let go
 # without moving to get its menu (index.html does the dragging). Letting go of a
 # widget that way shows resize handles on its right and bottom edges instead:
-# dragging them snaps the widget to the grid, within the sizes it allows.
+# dragging them snaps the widget to the grid, within the sizes it allows, and
+# dragging the widget itself moves it, staying in that mode once let go.
 #
 # The native shell (android/) serves this folder in a WebView, answers
 # apps.json and widgets.json, hosts the widgets as native views over the
@@ -93,6 +94,7 @@ WCLEAR: Const[i32] = 38
 CHOOSE_FIRST_WIDGET: Const[i32] = 39
 RESIZE: Const[i32] = 40        # arg: columns * 4096 + height in px for the widget being resized
 RESIZE_DONE: Const[i32] = 41
+GRAB: Const[i32] = 42          # arg: the widget slot showing handles, picked up by its body
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 40
@@ -151,6 +153,7 @@ sheet: i32 = 0
 item: i32 = -1       # home slot the item sheet is about
 lifted: i32 = -1     # home slot picked up by a long press, being dragged
 resizing: i32 = -1   # widget slot showing resize handles
+regrab: i32 = 0      # the lifted slot was grabbed while showing handles: drop it back into them
 pending: i32 = 0     # JSON handle of a request in flight
 
 
@@ -407,7 +410,7 @@ def slot_of_widget(wid: i32) -> i32:
 
 
 def close_all() -> None:
-    global drawer, picking, sheet, item, lifted, resizing
+    global drawer, picking, sheet, item, lifted, resizing, regrab
     s_clear(query)
     drawer = 0
     picking = 0
@@ -415,10 +418,11 @@ def close_all() -> None:
     item = -1
     lifted = -1
     resizing = -1
+    regrab = 0
 
 # ---- Update
 def update(msg: i32, arg: i32) -> None:
-    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted, resizing
+    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted, resizing, regrab
     i: i32
     if msg == LOADED:
         load_apps(arg)
@@ -465,27 +469,35 @@ def update(msg: i32, arg: i32) -> None:
         haptic()
         sheet = SHEET_MENU
     elif msg == LIFT:
-        if drawer == 0 and sheet == NONE:
+        if drawer == 0 and sheet == NONE and arg != lifted:
             haptic()
             resizing = -1
+            regrab = 0
             lifted = arg
     elif msg == WIDGET_MENU:
         i = slot_of_widget(arg)
         if i >= 0 and drawer == 0 and sheet == NONE:
             resizing = -1
+            regrab = 0
             lifted = i
+    elif msg == GRAB:
+        if arg >= 0 and arg == resizing and drawer == 0 and sheet == NONE:
+            resizing = -1
+            regrab = 1
+            lifted = arg
     elif msg == DRAG_TO:
         if lifted >= 0 and arg >= 0 and arg < nh and arg != lifted:
             move_slot(lifted, arg)
             lifted = arg
     elif msg == DROP:
-        if lifted >= 0 and arg == 0:
+        if lifted >= 0 and (arg == 0 or regrab == 1):
             if hkind[lifted] == WIDGET:
                 resizing = lifted
             else:
                 item = lifted
                 sheet = SHEET_ITEM
         lifted = -1
+        regrab = 0
     elif msg == RESIZE:
         if resizing >= 0:
             hw[resizing] = arg // 4096
@@ -551,6 +563,7 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == BACK:
         if lifted >= 0:
             lifted = -1
+            regrab = 0
         elif resizing >= 0:
             resizing = -1
         elif sheet != NONE:
@@ -586,7 +599,7 @@ def view_resize_bar() -> None:
     attr("role", "toolbar")
     el("span")
     cls("resize-hint")
-    text("Drag the handles to resize")
+    text("Drag to move, or drag the handles to resize")
     end()
     btn_open("ghost", REMOVE, resizing)
     cls("sm")

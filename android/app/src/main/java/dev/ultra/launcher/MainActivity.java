@@ -98,6 +98,7 @@ public class MainActivity extends Activity {
     private final Map<Integer, AppWidgetHostView> widgetViews = new HashMap<>();
     private final Map<Integer, Long> widgetSizes = new HashMap<>(); // last size told to each widget
     private int pendingWidget = -1;
+    private int editingWidget = -1; // showing resize handles: a press on it moves it
     private boolean ready;
     private int insetTop, insetBottom; // CSS px
     private LauncherApps launcher;
@@ -522,14 +523,19 @@ public class MainActivity extends Activity {
         web.setSystemGestureExclusionRects(rects);
     }
 
-    /** Lay widget views over the page's live slots: [[id, x, y, w, h], ...] in CSS px. */
+    /**
+     * Lay widget views over the page's live slots: [[id, x, y, w, h, editing], ...] in CSS
+     * px, where editing is 1 for the one showing resize handles.
+     */
     private void placeWidgets(String json) {
         float d = getResources().getDisplayMetrics().density;
         Map<Integer, int[]> want = new HashMap<>();
+        int editing = -1;
         try {
             JSONArray a = new JSONArray(json);
             for (int i = 0; i < a.length(); i++) {
                 JSONArray r = a.getJSONArray(i);
+                if (r.optInt(5) == 1) editing = r.getInt(0);
                 want.put(r.getInt(0), new int[] {
                         Math.round(r.getInt(1) * d), Math.round(r.getInt(2) * d),
                         Math.round(r.getInt(3) * d), Math.round(r.getInt(4) * d),
@@ -538,6 +544,7 @@ public class MainActivity extends Activity {
         } catch (JSONException e) {
             return;
         }
+        editingWidget = editing;
         for (Map.Entry<Integer, AppWidgetHostView> e : widgetViews.entrySet()) {
             if (!want.containsKey(e.getKey())) e.getValue().setVisibility(View.GONE);
         }
@@ -576,6 +583,7 @@ public class MainActivity extends Activity {
      * Widget views that report a long press to the page instead of to the widget. The press
      * lifts the widget's slot; the moves and the release that follow go to the page as
      * widgetDrag(x, y) in CSS px and widgetDrop(moved), so it can be dragged to a new place.
+     * A widget showing resize handles is picked up by any press on it (widgetGrab(id)).
      */
     static final class Host extends AppWidgetHost {
         Host(MainActivity a) { super(a, HOST_ID); }
@@ -615,6 +623,14 @@ public class MainActivity extends Activity {
                     longPressed = false;
                     downX = e.getX();
                     downY = e.getY();
+                    if (home.editingWidget == id) {
+                        // Being resized: the press moves it, without a long press first.
+                        longPressed = true;
+                        moved = false;
+                        setAlpha(.85f);
+                        home.js("widgetGrab(" + id + ")");
+                        return true;
+                    }
                     postDelayed(fire, ViewConfiguration.getLongPressTimeout());
                     break;
                 case MotionEvent.ACTION_MOVE:
