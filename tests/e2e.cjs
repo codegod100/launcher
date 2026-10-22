@@ -115,7 +115,7 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await p.mouse.up(); await settle();
   const [w1, h1] = await size();
   assert.ok(w1 < w0 && Math.abs(w1 - (2 * tile.width + 8)) < 3, `two columns wide: ${w1} (tile ${tile.width})`);
-  assert.equal(h1, 2 * 76 + 16, "snapped to two whole rows of tiles");
+  assert.equal(h1, 2 * 72 + 12, "snapped to two whole rows of tiles");
   assert.ok(await p.$(".widget-slot.resizing"), "letting go of a handle keeps the handles");
   await p.click(".resize-bar >> text=Done"); await settle();
   assert.ok(!(await p.$(".resize-handle")));

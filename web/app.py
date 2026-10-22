@@ -104,7 +104,7 @@ GRAB: Const[i32] = 42          # arg: the widget slot showing handles, picked up
 CHECK_UPDATES: Const[i32] = 43
 
 CAP: Const[i32] = 512
-HOME_CAP: Const[i32] = 40
+HOME_CAP: Const[i32] = 200
 WCAP: Const[i32] = 256
 
 APP: Const[i32] = 0
@@ -624,7 +624,7 @@ def view_resize_bar() -> None:
 
 def widget_rows(h: i32) -> i32:
     """Rows of app tiles nearest to a widget height in CSS px, at least one."""
-    k: i32 = (h + 16 + 46) // 92
+    k: i32 = (h + 12 + 42) // 84
     if k < 1:
         k = 1
     return k
@@ -639,7 +639,7 @@ def view_home_slot(i: i32) -> None:
         cls_if("lifted", i == lifted)
         cls_if("resizing", i == resizing)
         attr_num("data-slot", i)
-        # Its height spans whole rows of app tiles (76px rows, 16px gaps; style.css).
+        # Its height spans whole rows of app tiles (72px rows, 12px gaps; style.css).
         s_set(scratch, "grid-row:span ")
         s_add_num(scratch, widget_rows(hh[i]))
         if hw[i] > 0:
