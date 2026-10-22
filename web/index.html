@@ -116,8 +116,9 @@
     };
     window.ultraIcons = gotIcons; // the shell calls this before ultraHome exists, too
 
+    let ready = false; // the grid code below exists and app is mounted
     const app = await mount("#app", "./app.wasm", {
-      onRender: () => { fillIcons(); place(); watchDrawer(); },
+      onRender: () => { fillIcons(); place(); watchDrawer(); if (ready) measureGrid(); },
       imports: ({ strs }) => ({
         launch: (h) => host.launch(strs[h]),
         app_info: (h) => host.appInfo(strs[h]),
@@ -131,34 +132,66 @@
       }),
     });
 
+    ready = true;
+
     // Messages the shell and the gestures below send (keep in sync with app.py).
     const RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
-          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40, GRAB = 42, WIDGET_COLS = 44;
+          WIDGET_ADDED = 7, WIDGET_MENU = 8, MOVE_CELL = 35, DROP = 36, RESIZE = 40, GRAB = 42, WIDGET_COLS = 44,
+          GRID = 45, PIN = 46;
+
+    // The home grid: its columns, and as many rows as fit down to the bottom of the
+    // screen (app.py lays those out, so the empty cells there are real cells).
+    const grid = () => {
+      const slots = document.querySelector(".slots");
+      if (!slots) return null;
+      const cs = getComputedStyle(slots), r = slots.getBoundingClientRect();
+      const colW = parseFloat(cs.gridTemplateColumns), gap = parseFloat(cs.columnGap) || 0;
+      return { left: r.left, top: r.top, cols: cs.gridTemplateColumns.split(" ").length,
+               colW, gap, cell: parseFloat(cs.gridAutoRows) || 72, rgap: parseFloat(cs.rowGap) || 0 };
+    };
+    let gridSent = -1;
+    const measureGrid = () => {
+      const g = grid(), home = document.querySelector(".home");
+      if (!g || !home) return;
+      const bottom = innerHeight - parseFloat(getComputedStyle(home).paddingBottom); // of the first screen
+      const rows = Math.max(1, Math.floor((bottom - (g.top + scrollY) + g.rgap) / (g.cell + g.rgap)));
+      const v = g.cols * 4096 + rows;
+      if (v !== gridSent) { gridSent = v; app.dispatch(GRID, v); }
+    };
+    const cellAt = (g, x, y) => [Math.max(0, Math.round((x - g.left) / (g.colW + g.gap))),
+                                 Math.max(0, Math.round((y - g.top) / (g.cell + g.rgap)))];
 
     // Dragging a home slot. A long press lifts it (app.py marks it .lifted); moving the
-    // finger then slides it to the slot under the finger, and letting go drops it there.
+    // finger then carries it over the grid to the cell under it (by where it was held);
+    // letting go drops it there, and whatever it covers moves to the first free cells. Before the first move every slot is
+    // pinned where it shows, so the rest stay put and its old cell is left empty.
     // Letting go without moving opens its menu instead. A widget showing resize handles
     // needs no long press: pressing its body picks it up right away (GRAB), and it keeps
     // its handles when let go. Native widget views take their own touches, so the shell
     // reports those through widgetGrab/widgetDrag/widgetDrop.
     let drag = null, dragged = false; // drag: { x, y, moved } from pointerdown
-    const slotAt = (x, y) => {
-      let best = -1, bestD = Infinity;
+    let carry = null; // { dx, dy, cell }: where the lifted slot was held, the cell sent last
+    const freeze = (g) => {
       for (const li of document.querySelectorAll(".slots > li[data-slot]")) {
-        const r = li.getBoundingClientRect();
-        const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
-        const d = dx * dx + dy * dy;
-        if (d < bestD) { bestD = d; best = +li.dataset.slot; }
+        const r = li.getBoundingClientRect(), k = li.classList.contains("lifted") ? 1.12 : 1; // style.css
+        const [col, row] = cellAt(g, r.left + r.width / 2 * (1 - 1 / k), r.top + r.height / 2 * (1 - 1 / k));
+        app.dispatch(PIN, +li.dataset.slot * 65536 + row * 64 + Math.min(col, 63));
       }
-      return best;
     };
-    const dragTo = (x, y) => {
-      const lifted = document.querySelector(".slots > .lifted");
-      if (!lifted) return;
-      const to = slotAt(x, y);
-      if (to >= 0 && to !== +lifted.dataset.slot) app.dispatch(DRAG_TO, to);
+    const dragTo = (x, y, x0 = x, y0 = y) => { // x0, y0: where the finger went down
+      const lifted = document.querySelector(".slots > .lifted"), g = grid();
+      if (!lifted || !g) return;
+      if (!carry) {
+        const r = lifted.getBoundingClientRect();
+        carry = { dx: x0 - r.left, dy: y0 - r.top, cell: -1 };
+        freeze(g);
+      }
+      const [col, row] = cellAt(g, x - carry.dx, y - carry.dy);
+      const cell = row * 64 + Math.min(col, 63);
+      if (cell !== carry.cell) { carry.cell = cell; app.dispatch(MOVE_CELL, cell); }
     };
     const drop = (moved) => {
+      carry = null;
       if (document.querySelector(".slots > .lifted")) app.dispatch(DROP, moved ? 1 : 0);
     };
     let grabbed = false;
@@ -175,7 +208,7 @@
       if (!drag || !document.querySelector(".slots > .lifted")) return;
       if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 10) return;
       drag.moved = dragged = true;
-      dragTo(e.clientX, e.clientY);
+      dragTo(e.clientX, e.clientY, drag.x, drag.y);
     });
     addEventListener("pointerup", () => { if (drag) drop(drag.moved); drag = null; });
     addEventListener("pointercancel", () => { if (drag) drop(drag.moved); drag = null; });
@@ -266,7 +299,8 @@
         for (const img of document.querySelectorAll("img.icon")) img.__icon = undefined; },
     };
     addEventListener("scroll", () => requestAnimationFrame(place), { passive: true });
-    addEventListener("resize", () => requestAnimationFrame(place));
+    addEventListener("resize", () => requestAnimationFrame(() => { place(); measureGrid(); }));
+    measureGrid();
 
     // Swipe down on the home screen opens the drawer; swipe up closes it once its
     // list is scrolled to the end (or doesn't scroll).
