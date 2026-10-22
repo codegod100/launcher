@@ -710,12 +710,6 @@ def view_home() -> None:
     on_longpress(MENU, 0)
     if resizing >= 0:
         on_click(RESIZE_DONE, 0)   # a tap beside the widget finishes
-    el("button")
-    cls("pull")
-    attr("aria-label", "All apps")
-    on_click(OPEN_DRAWER, 0)
-    end()
-
     view_panel()
 
     el("ul")
