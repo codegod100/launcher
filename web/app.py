@@ -102,6 +102,7 @@ RESIZE: Const[i32] = 40        # arg: columns * 4096 + height in px for the widg
 RESIZE_DONE: Const[i32] = 41
 GRAB: Const[i32] = 42          # arg: the widget slot showing handles, picked up by its body
 CHECK_UPDATES: Const[i32] = 43
+WIDGET_COLS: Const[i32] = 44   # arg: columns for the widget just added (0: the whole row)
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 200
@@ -539,6 +540,10 @@ def update(msg: i32, arg: i32) -> None:
         if chosen >= 0 and nh < HOME_CAP:
             push_slot(WIDGET, s_dup(wlabels[chosen]), arg, wheights[chosen])
             chosen = -1
+    elif msg == WIDGET_COLS:
+        if nh > 0 and hkind[nh - 1] == WIDGET:
+            hw[nh - 1] = arg
+            save_home()
     elif msg == REMOVE:
         resizing = -1
         remove_slot(arg)

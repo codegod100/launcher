@@ -482,8 +482,9 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * How far a placed widget may be resized, in CSS px: {"minW", "minH", "maxW", "maxH"
-     * (0 = no limit), "h", "v" (whether it resizes horizontally / vertically)}.
+     * A placed widget's natural width and how far it may be resized, in CSS px: {"w",
+     * "minW", "minH", "maxW", "maxH" (0 = no limit), "h", "v" (whether it resizes
+     * horizontally / vertically)}.
      */
     private String widgetLimits(int id) {
         AppWidgetProviderInfo w = widgets.getAppWidgetInfo(id);
@@ -499,7 +500,8 @@ public class MainActivity extends Activity {
                 maxW = w.maxResizeWidth;
                 maxH = w.maxResizeHeight;
             }
-            o.put("minW", Math.round(minW / d)).put("minH", Math.round(minH / d))
+            o.put("w", Math.round(w.minWidth / d))
+                    .put("minW", Math.round(minW / d)).put("minH", Math.round(minH / d))
                     .put("maxW", Math.round(maxW / d)).put("maxH", Math.round(maxH / d))
                     .put("h", (w.resizeMode & AppWidgetProviderInfo.RESIZE_HORIZONTAL) != 0)
                     .put("v", (w.resizeMode & AppWidgetProviderInfo.RESIZE_VERTICAL) != 0);

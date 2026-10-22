@@ -133,7 +133,7 @@
 
     // Messages the shell and the gestures below send (keep in sync with app.py).
     const RELOAD = 2, HOME = 3, BACK = 4, SWIPE_DOWN = 5, SWIPE_UP = 6,
-          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40, GRAB = 42;
+          WIDGET_ADDED = 7, WIDGET_MENU = 8, DRAG_TO = 35, DROP = 36, RESIZE = 40, GRAB = 42, WIDGET_COLS = 44;
 
     // Dragging a home slot. A long press lifts it (app.py marks it .lifted); moving the
     // finger then slides it to the slot under the finger, and letting go drops it there.
@@ -238,11 +238,24 @@
     }, true);
     addEventListener("touchmove", (e) => { if (rs && e.cancelable) e.preventDefault(); }, { passive: false });
 
+    // A new widget starts as many columns wide as its natural width needs (widgetLimits
+    // "w", CSS px), like its height starts at whole rows; 0 is the whole row.
+    const widgetCols = (id) => {
+      let lim = {};
+      try { lim = JSON.parse(host.widgetLimits?.(id) || "{}"); } catch {}
+      const slots = document.querySelector(".slots");
+      if (!lim.w || !slots) return 0;
+      const cs = getComputedStyle(slots), cols = cs.gridTemplateColumns.split(" ").map(parseFloat);
+      const gap = parseFloat(cs.columnGap) || 0;
+      const k = Math.max(1, Math.ceil((lim.w + gap - 8) / (cols[0] + gap)));
+      return k >= cols.length ? 0 : k;
+    };
+
     window.ultraHome = {
       reload: () => app.dispatch(RELOAD, 0),
       home: () => { app.dispatch(HOME, 0); window.scrollTo({ top: 0, behavior: "smooth" }); },
       back: () => app.dispatch(BACK, 0),
-      widgetAdded: (id) => app.dispatch(WIDGET_ADDED, id),
+      widgetAdded: (id) => { app.dispatch(WIDGET_ADDED, id); app.dispatch(WIDGET_COLS, widgetCols(id)); },
       widgetMenu: (id) => app.dispatch(WIDGET_MENU, id),
       widgetGrab: (id) => { const li = document.querySelector(`.widget-slot.resizing[data-wid="${id}"]`);
         if (li) app.dispatch(GRAB, +li.dataset.slot); },
