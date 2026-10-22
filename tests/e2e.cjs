@@ -147,15 +147,18 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.deepEqual(await size(), [w1, h1], "the size is saved");
   // while it shows handles, dragging the widget itself moves it, without another long press
   await longpress(".widget-slot");
-  const order = () => p.$$eval(".slots > li", (ls) => ls.map((l) => l.classList.contains("widget-slot") ? "W" : "a"));
-  assert.notEqual((await order())[0], "W");
+  const atStart = () => p.$eval(".widget-slot", (w) => {
+    const r = w.getBoundingClientRect(), s = w.parentElement.getBoundingClientRect();
+    return Math.abs(r.left - s.left) < 2 && Math.abs(r.top - s.top) < 2;
+  });
+  assert.ok(!(await atStart()));
   const wb = await p.locator(".widget-slot").boundingBox(), first = await p.locator(".slots > li").first().boundingBox();
   await p.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2);
   await p.mouse.down(); await settle();
   assert.ok(await p.$(".widget-slot.lifted"), "pressing a widget with handles picks it up");
   await p.mouse.move(first.x + first.width / 2, first.y + first.height / 2, { steps: 8 }); await settle();
   await p.mouse.up(); await settle();
-  assert.equal((await order())[0], "W", "dragged to the front");
+  assert.ok(await atStart(), "dragged onto the top row, first cell");
   // the apps flow into the cells beside it: a 2x2 widget in 5 columns leaves room for all four
   const beside = await p.$eval(".widget-slot", (w) => {
     const r = w.getBoundingClientRect();

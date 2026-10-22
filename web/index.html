@@ -185,12 +185,15 @@
         const r = lifted.getBoundingClientRect();
         carry = { dx: x0 - r.left, dy: y0 - r.top, cell: -1 };
       }
-      if (inside(lifted.getBoundingClientRect(), x, y)) return;
+      // A widget goes to the cell under it wherever that is (apps flow around it), so it
+      // can sit on any row; an app over another app takes its place in the order.
+      const widget = lifted.classList.contains("widget-slot");
+      if (!widget && inside(lifted.getBoundingClientRect(), x, y)) return;
       // the cell under the finger: a slot there takes the lifted one's place in the order
       const [fc, fr] = cellAt(g, x - g.colW / 2, y - g.cell / 2);
       const to = slotAt(x, y) >= 0 ? slotAt(x, y)
         : slotAt(g.left + fc * (g.colW + g.gap) + g.colW / 2, g.top + fr * (g.cell + g.rgap) + g.cell / 2);
-      if (to >= 0) { carry.cell = -1; app.dispatch(DRAG_TO, to); return; }
+      if (to >= 0 && !widget) { carry.cell = -1; app.dispatch(DRAG_TO, to); return; }
       if (y > g.top + g.rows * (g.cell + g.rgap)) return; // below the grid
       const [col, row] = cellAt(g, x - carry.dx, y - carry.dy);
       const cell = row * 64 + Math.min(col, 63);
