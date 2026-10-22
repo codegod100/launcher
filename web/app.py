@@ -33,6 +33,11 @@ def app_info(component: i32) -> None:
     pass
 
 @jscall
+def uninstall(component: i32) -> None:
+    """Ask the system to uninstall the package of a "pkg/cls" string handle."""
+    pass
+
+@jscall
 def add_widget(provider: i32) -> None:
     """Bind (and configure) a widget; the shell answers with WIDGET_ADDED(id)."""
     pass
@@ -80,7 +85,7 @@ CLOSE_DRAWER: Const[i32] = 15
 OPEN_APP: Const[i32] = 16      # arg: row in the app list
 OPEN_FIRST: Const[i32] = 17
 OPEN_HOME: Const[i32] = 18     # arg: home slot
-ADD_HOME: Const[i32] = 19      # arg: row in the app list (long press in the drawer)
+ADD_HOME: Const[i32] = 19      # arg: row in the app list
 TOGGLE_HOME: Const[i32] = 20   # arg: row in the app list (drawer in pick mode)
 MENU: Const[i32] = 21          # long press on the empty home
 CLOSE_SHEET: Const[i32] = 23
@@ -107,6 +112,9 @@ CHECK_UPDATES: Const[i32] = 43
 WIDGET_COLS: Const[i32] = 44   # arg: columns for the widget just added (0: the whole row)
 GRID: Const[i32] = 45          # arg: columns * 4096 + rows that fit on the screen
 MOVE_CELL: Const[i32] = 47     # arg: row * 64 + column of the empty cell the lifted slot is over
+APP_MENU: Const[i32] = 48      # arg: row in the app list (long press in the drawer)
+APP_INFO: Const[i32] = 49      # arg: row in the app list
+UNINSTALL: Const[i32] = 50     # arg: row in the app list
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 200
@@ -119,6 +127,7 @@ NONE: Const[i32] = 0
 SHEET_MENU: Const[i32] = 1
 SHEET_ITEM: Const[i32] = 2
 SHEET_WIDGETS: Const[i32] = 3
+SHEET_APP: Const[i32] = 4
 
 # ---- Model
 # Every module-level array is i32[512], even where HOME_CAP or WCAP is smaller:
@@ -129,6 +138,7 @@ SHEET_WIDGETS: Const[i32] = 3
 labels: i32[512] = empty(512, dtype=int32)
 comps: i32[512] = empty(512, dtype=int32)
 icons: i32[512] = empty(512, dtype=int32)
+system: i32[512] = empty(512, dtype=int32)   # 1: a system app, which can't be uninstalled
 n: i32 = 0
 # The home screen, in order. An app slot keeps its component name in hstr;
 # a widget slot keeps the widget's label there, its host id in hwid, its
@@ -169,6 +179,8 @@ drawer: i32 = 0
 picking: i32 = 0     # drawer is in "add apps" mode: taps toggle home slots
 sheet: i32 = 0
 item: i32 = -1       # home slot the item sheet is about
+app_row: i32 = -1    # row in the app list the app sheet is about
+gone: i32 = 0        # component being uninstalled: its home slot goes when it leaves the list
 lifted: i32 = -1     # home slot picked up by a long press, being dragged
 resizing: i32 = -1   # widget slot showing resize handles
 regrab: i32 = 0      # the lifted slot was grabbed while showing handles: drop it back into them
@@ -176,7 +188,7 @@ pending: i32 = 0     # JSON handle of a request in flight
 
 
 def init() -> None:
-    global query, wquery, err, notice, scratch, nh, next_key, pending
+    global query, wquery, err, notice, scratch, gone, nh, next_key, pending
     i: i32
     h: i32
     k: i32
@@ -185,6 +197,7 @@ def init() -> None:
     err = s_new()
     notice = s_new()
     scratch = s_new()
+    gone = s_new()
     count: i32 = load_i32("ultra.home.n", 0)
     for i in range(count):
         h = s_new()
@@ -262,10 +275,12 @@ def load_apps(doc: i32) -> None:
         ok = j_str(row, "label", labels[n])
         ok = j_str(row, "component", comps[n])
         ok = j_str(row, "icon", icons[n])
+        system[n] = j_int(row, "system")
         j_free(row)
         n += 1
     j_free(arr)
     j_free(doc)
+    drop_gone()
 
 
 def load_widgets(doc: i32) -> None:
@@ -372,6 +387,21 @@ def add_app(row: i32) -> None:
     else:
         push_slot(APP, s_dup(comps[row]), 0, 0)
         say("Added to home")
+
+
+def drop_gone() -> None:
+    """Once an app uninstalled from the drawer is out of the list, take it off home."""
+    i: i32
+    if s_len(gone) == 0:
+        return
+    for i in range(n):
+        if s_eq(comps[i], gone) == 1:
+            return
+    for i in range(nh):
+        if hkind[i] == APP and s_eq(hstr[i], gone) == 1:
+            remove_slot(i)
+            break
+    s_clear(gone)
 
 
 def remove_slot(at: i32) -> None:
@@ -486,22 +516,26 @@ def slot_of_widget(wid: i32) -> i32:
 
 
 def close_all() -> None:
-    global drawer, picking, sheet, item, lifted, resizing, regrab
+    global drawer, picking, sheet, item, app_row, lifted, resizing, regrab
     s_clear(query)
     drawer = 0
     picking = 0
     sheet = NONE
     item = -1
+    app_row = -1
     lifted = -1
     resizing = -1
     regrab = 0
 
 # ---- Update
 def update(msg: i32, arg: i32) -> None:
-    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted, resizing, regrab, ncols, nrows
+    global loading, drawer, picking, sheet, item, app_row, pending, wloading, chosen, lifted, resizing, regrab, ncols, nrows
     i: i32
     if msg == LOADED:
         load_apps(arg)
+        if sheet == SHEET_APP:   # rows may have moved
+            sheet = NONE
+            app_row = -1
     elif msg == WIDGETS_LOADED:
         load_widgets(arg)
     elif msg == QUERY:
@@ -532,8 +566,23 @@ def update(msg: i32, arg: i32) -> None:
         resizing = -1
         launch(hstr[arg])
     elif msg == ADD_HOME:
-        haptic()
         add_app(arg)
+        sheet = NONE
+        app_row = -1
+    elif msg == APP_MENU:
+        if drawer == 1 and sheet == NONE:
+            haptic()
+            app_row = arg
+            sheet = SHEET_APP
+    elif msg == APP_INFO:
+        app_info(comps[arg])
+        sheet = NONE
+        app_row = -1
+    elif msg == UNINSTALL:
+        s_copy(gone, comps[arg])
+        uninstall(comps[arg])
+        sheet = NONE
+        app_row = -1
     elif msg == TOGGLE_HOME:
         i = home_of(arg)
         if i >= 0:
@@ -598,6 +647,7 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == CLOSE_SHEET:
         sheet = NONE
         item = -1
+        app_row = -1
     elif msg == PICK_APPS:
         sheet = NONE
         drawer = 1
@@ -631,6 +681,7 @@ def update(msg: i32, arg: i32) -> None:
         remove_slot(arg)
         sheet = NONE
         item = -1
+        app_row = -1
     elif msg == MOVE:
         if arg > 0:
             swap_slots(arg, arg - 1)
@@ -666,6 +717,7 @@ def update(msg: i32, arg: i32) -> None:
         elif sheet != NONE:
             sheet = NONE
             item = -1
+            app_row = -1
         elif drawer == 1:
             drawer = 0
             picking = 0
@@ -872,7 +924,7 @@ def view_drawer() -> None:
                 on_click(TOGGLE_HOME, i)
             else:
                 on_click(OPEN_APP, i)
-                on_longpress(ADD_HOME, i)
+                on_longpress(APP_MENU, i)
             view_icon(icons[i])
             el("span")
             cls("name")
@@ -943,6 +995,19 @@ def view_sheet() -> None:
             sheet_btn("Remove from home", REMOVE, item)
         else:
             sheet_btn("Remove widget", REMOVE, item)
+    elif sheet == SHEET_APP and app_row >= 0 and app_row < n:
+        el("h2")
+        cls("sheet-title")
+        text_ref(labels[app_row])
+        end()
+        i = home_of(app_row)
+        if i >= 0:
+            sheet_btn("Remove from home", REMOVE, i)
+        else:
+            sheet_btn("Add to home", ADD_HOME, app_row)
+        sheet_btn("App info", APP_INFO, app_row)
+        if system[app_row] == 0:
+            sheet_btn("Uninstall", UNINSTALL, app_row)
     elif sheet == SHEET_WIDGETS:
         el("h2")
         cls("sheet-title")

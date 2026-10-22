@@ -115,6 +115,16 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await swipe(200, 500);
   await p.waitForSelector(".drawer .tile", { timeout: 2000 });
   await longpress(".apps .tile:first-child");
+  assert.deepEqual(await p.$$eval(".sheet-item", (bs) => bs.map((b) => b.textContent)), ["Add to home", "App info", "Uninstall"]);
+  await p.click(".sheet-item:has-text('Uninstall')"); await settle();
+  assert.equal(await p.textContent("#toast"), "Uninstall com.example.calculator/.MainActivity");
+  assert.ok(!(await p.$(".sheet")) && (await p.$(".drawer")), "uninstalling closes the menu, not the drawer");
+  await p.fill(".drawer input", "phone"); await settle();
+  await longpress(".apps .tile:first-child");
+  assert.ok(!(await p.$(".sheet-item:has-text('Uninstall')")), "system apps can't be uninstalled");
+  await p.click(".sheet-overlay", { position: { x: 10, y: 10 } }); await p.fill(".drawer input", ""); await settle();
+  await longpress(".apps .tile:first-child");
+  await p.click(".sheet-item:has-text('Add to home')"); await settle();
   assert.equal(await p.textContent(".notice"), "Added to home");
   await swipe(600, 200);
   await p.waitForSelector(".drawer", { state: "detached", timeout: 2000 }); // swipe up closes it

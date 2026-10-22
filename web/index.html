@@ -25,6 +25,7 @@
     const host = window.Android || {
       launch: (c) => toast("Open " + c),
       appInfo: (c) => toast("App info for " + c),
+      uninstall: (c) => toast("Uninstall " + c),
       addWidget: () => setTimeout(() => window.ultraHome.widgetAdded(demoWidget++), 0),
       removeWidget: () => {},
       placeWidgets: () => {},
@@ -122,6 +123,7 @@
       imports: ({ strs }) => ({
         launch: (h) => host.launch(strs[h]),
         app_info: (h) => host.appInfo(strs[h]),
+        uninstall: (h) => host.uninstall(strs[h]),
         add_widget: (h) => host.addWidget(strs[h]),
         remove_widget: (id) => host.removeWidget(id),
         open_settings: () => host.openSettings(),

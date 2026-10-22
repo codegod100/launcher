@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
@@ -69,7 +70,7 @@ import java.util.concurrent.Executors;
  * to wasm), packaged as assets and served to a transparent WebView from a virtual https
  * origin. This class answers the two dynamic URLs the app fetches:
  *
- *   apps.json       {"apps": [{"label", "component", "icon"}]}, every launchable activity
+ *   apps.json       {"apps": [{"label", "component", "icon", "system"}]}, every launchable activity
  *   icon?c=COMP     the activity's icon as a PNG
  *   widgets.json    {"widgets": [{"label", "app", "provider", "icon", "h"}]}, every widget provider
  *   wicon?p=PROV    the provider's icon as a PNG
@@ -281,10 +282,13 @@ public class MainActivity extends Activity {
             if (cn.getPackageName().equals(getPackageName())) continue;
             String c = cn.flattenToShortString();
             activities.put(c, a);
-            apps.put(new JSONObject()
+            JSONObject o = new JSONObject()
                     .put("label", labels.get(a))
                     .put("component", c)
-                    .put("icon", "icon?c=" + Uri.encode(c)));
+                    .put("icon", "icon?c=" + Uri.encode(c));
+            // System apps can't be uninstalled, so the drawer offers no Uninstall for them.
+            if ((a.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) != 0) o.put("system", true);
+            apps.put(o);
         }
         return new JSONObject().put("apps", apps).toString();
     }
@@ -751,6 +755,15 @@ public class MainActivity extends Activity {
             main.post(() -> {
                 ComponentName cn = ComponentName.unflattenFromString(component);
                 if (cn != null) launcher.startAppDetailsActivity(cn, user, null, null);
+            });
+        }
+
+        /** The system asks the user to confirm; the app list reloads when the package goes. */
+        @JavascriptInterface public void uninstall(String component) {
+            main.post(() -> {
+                ComponentName cn = ComponentName.unflattenFromString(component);
+                if (cn != null) startIntent(new Intent(Intent.ACTION_DELETE,
+                        Uri.fromParts("package", cn.getPackageName(), null)));
             });
         }
 
