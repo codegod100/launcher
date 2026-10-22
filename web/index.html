@@ -186,9 +186,8 @@
 
     // Resizing a widget. Holding a widget and letting go without moving shows handles on
     // its right edge, bottom edge and corner (app.py). Dragging one snaps the widget to
-    // whole grid columns and half rows, within the shell's limits for that widget
+    // whole grid columns and rows, within the shell's limits for that widget
     // (widgetLimits, CSS px: min/max size, 0 = no max, and whether it resizes h and v).
-    const CELL = 88; // a row of app tiles
     let rs = null, swallowClick = false;
     const span = (k, size, gap) => k * size + (k - 1) * gap;
     const fit = (want, lo, hi, size, gap, min, max) => {
@@ -210,6 +209,7 @@
       const r = li.getBoundingClientRect();
       rs = { li, edge: h.dataset.edge, left: r.left, top: r.top, lim, n: cols.length, colW: cols[0],
              gap: parseFloat(cs.columnGap) || 0, rgap: parseFloat(cs.rowGap) || 0,
+             cell: parseFloat(cs.gridAutoRows) || 88, // a row of app tiles
              cols: Math.round((r.width + (parseFloat(cs.columnGap) || 0)) / (cols[0] + (parseFloat(cs.columnGap) || 0))),
              h: Math.round(r.height) };
       dragged = true;
@@ -217,14 +217,13 @@
     }, true);
     addEventListener("pointermove", (e) => {
       if (!rs) return;
-      const { lim, n, colW, gap, rgap } = rs, half = (CELL + rgap) / 2;
+      const { lim, n, colW, gap, rgap, cell } = rs;
       let cols = rs.cols, h = rs.h;
       if (rs.edge !== "b" && lim.h !== false)
         cols = fit(e.clientX - rs.left, 1, n, colW, gap, lim.minW || 0, lim.maxW || 0);
       if (rs.edge !== "r" && lim.v !== false) {
-        // half-row steps: 2 halves are one row of tiles, 4 are two rows with the gap between
-        const k = fit(e.clientY - rs.top + rgap, 2, 40, half, 0, (lim.minH || 0) + rgap, lim.maxH ? lim.maxH + rgap : 0);
-        h = Math.round(k * half - rgap);
+        const k = fit(e.clientY - rs.top, 1, 20, cell, rgap, lim.minH || 0, lim.maxH || 0);
+        h = Math.round(span(k, cell, rgap));
       }
       if (cols === rs.cols && h === rs.h) return;
       rs.cols = cols; rs.h = h;

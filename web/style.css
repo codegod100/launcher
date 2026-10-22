@@ -36,6 +36,10 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
 .windows-glyph::after { inset: .3rem 0 0 .3rem; background: rgb(255 255 255 / .15); }
 .slots, .apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem .5rem;
                 grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Home rows are all one height, so a widget spans whole rows of app tiles, and apps
+   fill the cells beside a widget rather than leaving holes (dense packing). Keep
+   --cell and the gap in sync with widget_rows in app.py. */
+.slots { grid-auto-rows: 5.5rem; grid-auto-flow: row dense; }
 @media (min-width: 480px) { .slots, .apps { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: .4rem;
         padding: .35rem .15rem; border-radius: calc(var(--radius) + 4px); cursor: pointer; }
@@ -46,7 +50,7 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
 .name { max-width: 100%; font-size: .75rem; line-height: 1.2; text-align: center;
         text-shadow: var(--shadow-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* A widget takes a whole row. On a phone the native widget view covers the slot;
+/* A widget takes whole rows. On a phone the native widget view covers the slot;
    the label only shows while the slot is not live (or in a desktop browser). */
 .widget-slot { grid-column: 1 / -1; display: grid; place-items: center; box-sizing: border-box;
                border-radius: 1.25rem; background: rgb(255 255 255 / .1);
@@ -57,19 +61,19 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
 .widget-slot[data-wid]:not(.lifted):not(.resizing) { background: none; border-color: transparent; }
 
 /* A widget being resized: handles sit just outside its right and bottom edges, where the
-   native widget view doesn't cover them; the extra margin keeps the next row clear. */
+   native widget view doesn't cover them; the bottom one sits in the gap below the row. */
 .widget-slot { position: relative; }
-.widget-slot.resizing { margin-bottom: 1.75rem; outline: 2px solid rgb(255 255 255 / .85);
+.widget-slot.resizing { z-index: 2; outline: 2px solid rgb(255 255 255 / .85);
                         outline-offset: 3px; transition: none; }
 .resize-handle { position: absolute; z-index: 2; touch-action: none; cursor: nwse-resize; }
 .resize-handle::after { content: ""; position: absolute; border-radius: 999px; background: #fff;
                         box-shadow: 0 1px 6px rgb(0 0 0 / .45); }
 .resize-handle[data-edge="r"] { top: 0; bottom: 0; right: -16px; width: 16px; cursor: ew-resize; }
 .resize-handle[data-edge="r"]::after { top: 50%; left: 6px; width: 6px; height: 2.5rem; transform: translateY(-50%); }
-.resize-handle[data-edge="b"] { left: 0; right: 0; bottom: -1.75rem; height: 1.75rem; cursor: ns-resize; }
-.resize-handle[data-edge="b"]::after { left: 50%; top: 8px; width: 2.5rem; height: 6px; transform: translateX(-50%); }
-.resize-handle[data-edge="rb"] { right: -16px; bottom: -1.75rem; width: 2.75rem; height: 1.75rem; }
-.resize-handle[data-edge="rb"]::after { right: 4px; top: 6px; width: 14px; height: 14px; border-radius: 4px; }
+.resize-handle[data-edge="b"] { left: 0; right: 0; bottom: -1.25rem; height: 1.25rem; cursor: ns-resize; }
+.resize-handle[data-edge="b"]::after { left: 50%; top: 7px; width: 2.5rem; height: 6px; transform: translateX(-50%); }
+.resize-handle[data-edge="rb"] { right: -16px; bottom: -1.25rem; width: 2.75rem; height: 1.25rem; }
+.resize-handle[data-edge="rb"]::after { right: 4px; top: 3px; width: 14px; height: 14px; border-radius: 4px; }
 .resize-bar { position: fixed; left: 50%; bottom: calc(var(--bottom) + 1rem); z-index: 15; transform: translateX(-50%);
               display: flex; align-items: center; gap: .5rem; padding: .4rem .4rem .4rem 1rem; border-radius: 999px;
               background: rgb(0 0 0 / .8); color: #fff; font-size: .875rem; white-space: nowrap;

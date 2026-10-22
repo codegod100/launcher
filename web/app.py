@@ -12,8 +12,9 @@ from ui import btn_open, input_open, alert
 # A long press on a home app or widget picks it up: drag it to move it, or let go
 # without moving to get its menu (index.html does the dragging). Letting go of a
 # widget that way shows resize handles on its right and bottom edges instead:
-# dragging them snaps the widget to the grid, within the sizes it allows, and
-# dragging the widget itself moves it, staying in that mode once let go.
+# dragging them snaps the widget to whole grid columns and rows of app tiles,
+# within the sizes it allows, and dragging the widget itself moves it, staying
+# in that mode once let go. Apps flow into the free cells beside widgets.
 #
 # The native shell (android/) serves this folder in a WebView, answers
 # apps.json and widgets.json, hosts the widgets as native views over the
@@ -621,6 +622,14 @@ def view_resize_bar() -> None:
     end()
 
 
+def widget_rows(h: i32) -> i32:
+    """Rows of app tiles nearest to a widget height in CSS px, at least one."""
+    k: i32 = (h + 20 + 54) // 108
+    if k < 1:
+        k = 1
+    return k
+
+
 def view_home_slot(i: i32) -> None:
     row: i32
     if hkind[i] == WIDGET:
@@ -630,14 +639,12 @@ def view_home_slot(i: i32) -> None:
         cls_if("lifted", i == lifted)
         cls_if("resizing", i == resizing)
         attr_num("data-slot", i)
+        # Its height spans whole rows of app tiles (88px rows, 20px gaps; style.css).
+        s_set(scratch, "grid-row:span ")
+        s_add_num(scratch, widget_rows(hh[i]))
         if hw[i] > 0:
-            s_set(scratch, "grid-column:span ")
+            s_add(scratch, ";grid-column:span ")
             s_add_num(scratch, hw[i])
-            s_add(scratch, ";height:")
-        else:
-            s_set(scratch, "height:")
-        s_add_num(scratch, hh[i])
-        s_add(scratch, "px")
         attr_ref("style", scratch)
         # The native widget view is laid over slots marked live, so only mark
         # them while nothing covers the home screen. While one is resized the
