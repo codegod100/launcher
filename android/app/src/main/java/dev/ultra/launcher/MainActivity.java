@@ -622,6 +622,15 @@ public class MainActivity extends Activity {
             this.id = id;
         }
 
+        /**
+         * No inset: AppWidgetHostView pads older widgets by getDefaultPaddingForWidget
+         * (about 8dp a side) whenever it binds one, which left a margin inside the slot.
+         */
+        @Override
+        public void setPadding(int left, int top, int right, int bottom) {
+            super.setPadding(0, 0, 0, 0);
+        }
+
         @Override
         public boolean onInterceptTouchEvent(MotionEvent e) {
             switch (e.getActionMasked()) {
