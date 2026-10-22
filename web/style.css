@@ -52,6 +52,9 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
                border-radius: 1.25rem; background: rgb(255 255 255 / .1);
                border: 1px dashed rgb(255 255 255 / .3); }
 .widget-label { font-size: .875rem; opacity: .75; text-shadow: var(--shadow-text); }
+/* A live widget sits bare on the wallpaper; the frame only comes back while it is picked
+   up or resized (or while its native view is away, e.g. another widget is being resized). */
+.widget-slot[data-wid]:not(.lifted):not(.resizing) { background: none; border-color: transparent; }
 
 /* A widget being resized: handles sit just outside its right and bottom edges, where the
    native widget view doesn't cover them; the extra margin keeps the next row clear. */
