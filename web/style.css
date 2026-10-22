@@ -61,7 +61,10 @@ body { margin: 0; min-height: 100vh; color: #fff; -webkit-tap-highlight-color: t
 .widget-slot { grid-column: 1 / -1; display: grid; place-items: center; box-sizing: border-box;
                border-radius: 1.25rem; background: rgb(255 255 255 / .1);
                border: 1px dashed rgb(255 255 255 / .3); }
-.widget-label { font-size: .875rem; opacity: .75; text-shadow: var(--shadow-text); }
+.widget-label { font-size: .875rem; opacity: .75; text-shadow: var(--shadow-text);
+                max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The native view can be narrower than the slot, so the label would peek out at its sides. */
+.widget-slot[data-wid] .widget-label { visibility: hidden; }
 /* A live widget sits bare on the wallpaper; the frame only comes back while it is picked
    up or resized (or while its native view is away, e.g. another widget is being resized). */
 .widget-slot[data-wid]:not(.lifted):not(.resizing) { background: none; border-color: transparent; }
