@@ -9,12 +9,14 @@ from ui import btn_open, input_open, alert
 
 # An Android home screen. The home starts blank: you add apps and widgets to it
 # with a long press. Swiping down opens the drawer with every app and a search.
-# A long press on a home app or widget picks it up: drag it to move it, or let go
-# without moving to get its menu (index.html does the dragging). Letting go of a
-# widget that way shows resize handles on its right and bottom edges instead:
+# The home grid packs apps and widgets in order with no holes, and runs on to the
+# bottom of the screen. A long press on a home app or widget picks it up: drag it
+# over another to move it there in the order, or into an empty cell below to
+# leave it in that cell; or let go without moving to get its menu (index.html
+# does the dragging). Letting go of a widget that way shows resize handles on its right and bottom edges instead:
 # dragging them snaps the widget to whole grid columns and rows of app tiles,
 # within the sizes it allows, and dragging the widget itself moves it, staying
-# in that mode once let go. Apps flow into the free cells beside widgets.
+# in that mode once let go.
 #
 # The native shell (android/) serves this folder in a WebView, answers
 # apps.json and widgets.json, hosts the widgets as native views over the
@@ -103,6 +105,8 @@ RESIZE_DONE: Const[i32] = 41
 GRAB: Const[i32] = 42          # arg: the widget slot showing handles, picked up by its body
 CHECK_UPDATES: Const[i32] = 43
 WIDGET_COLS: Const[i32] = 44   # arg: columns for the widget just added (0: the whole row)
+GRID: Const[i32] = 45          # arg: columns * 4096 + rows that fit on the screen
+MOVE_CELL: Const[i32] = 47     # arg: row * 64 + column of the empty cell the lifted slot is over
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 200
@@ -136,7 +140,13 @@ hwid: i32[512] = empty(512, dtype=int32)
 hh: i32[512] = empty(512, dtype=int32)
 hw: i32[512] = empty(512, dtype=int32)
 hkey: i32[512] = empty(512, dtype=int32)
+# The grid cell a slot was dropped into (column hx, row hy, from 0), or -1: placed
+# in order by the grid's dense flow into the first free cells that fit it.
+hx: i32[512] = empty(512, dtype=int32)
+hy: i32[512] = empty(512, dtype=int32)
 nh: i32 = 0
+ncols: i32 = 5       # grid columns, and rows that fill the screen (index.html measures them)
+nrows: i32 = 0
 next_key: i32 = 1
 # Widget providers, for the picker.
 wlabels: i32[512] = empty(512, dtype=int32)
@@ -185,6 +195,8 @@ def init() -> None:
             hwid[nh] = load_i32_at("ultra.home.wid", i, 0)
             hh[nh] = load_i32_at("ultra.home.h", i, 120)
             hw[nh] = load_i32_at("ultra.home.w", i, 0)
+            hx[nh] = load_i32_at("ultra.home.cx", i, -1)
+            hy[nh] = load_i32_at("ultra.home.cy", i, -1)
             hkey[nh] = next_key
             next_key += 1
             nh += 1
@@ -202,6 +214,8 @@ def save_home() -> None:
         store_i32_at("ultra.home.wid", i, hwid[i])
         store_i32_at("ultra.home.h", i, hh[i])
         store_i32_at("ultra.home.w", i, hw[i])
+        store_i32_at("ultra.home.cx", i, hx[i])
+        store_i32_at("ultra.home.cy", i, hy[i])
 
 
 def say(msg: str) -> None:
@@ -342,6 +356,8 @@ def push_slot(kind: i32, s: i32, wid: i32, h: i32) -> None:
     hwid[nh] = wid
     hh[nh] = h
     hw[nh] = 0
+    hx[nh] = -1
+    hy[nh] = -1
     hkey[nh] = next_key
     next_key += 1
     nh += 1
@@ -370,6 +386,8 @@ def remove_slot(at: i32) -> None:
         hwid[j] = hwid[j + 1]
         hh[j] = hh[j + 1]
         hw[j] = hw[j + 1]
+        hx[j] = hx[j + 1]
+        hy[j] = hy[j + 1]
         hkey[j] = hkey[j + 1]
     nh -= 1
     save_home()
@@ -392,6 +410,12 @@ def swap_slots(a: i32, b: i32) -> None:
     t = hw[a]
     hw[a] = hw[b]
     hw[b] = t
+    t = hx[a]
+    hx[a] = hx[b]
+    hx[b] = t
+    t = hy[a]
+    hy[a] = hy[b]
+    hy[b] = t
     t = hkey[a]
     hkey[a] = hkey[b]
     hkey[b] = t
@@ -407,6 +431,50 @@ def move_slot(a: i32, b: i32) -> None:
     while i > b:
         swap_slots(i, i - 1)
         i -= 1
+
+
+def slot_w(i: i32) -> i32:
+    """Columns slot i spans."""
+    if hkind[i] == APP:
+        return 1
+    if hw[i] <= 0 or hw[i] > ncols:
+        return ncols
+    return hw[i]
+
+
+def slot_h(i: i32) -> i32:
+    """Rows slot i spans."""
+    if hkind[i] == APP:
+        return 1
+    return widget_rows(hh[i])
+
+
+def clear_cells(i: i32) -> None:
+    """Unpin the slots under pinned slot i, so they flow into free cells."""
+    j: i32
+    for j in range(nh):
+        if j != i and hx[j] >= 0 and hx[j] < hx[i] + slot_w(i) and hx[i] < hx[j] + slot_w(j) \
+                and hy[j] < hy[i] + slot_h(i) and hy[i] < hy[j] + slot_h(j):
+            hx[j] = -1
+            hy[j] = -1
+
+
+def pin_slot(i: i32, col: i32, row: i32) -> None:
+    """Pin slot i with its top left at col, row (kept on the screen's grid). It may
+    cover others while it is carried; clear_cells moves them off once it is put down."""
+    x: i32 = col
+    y: i32 = row
+    if x + slot_w(i) > ncols:
+        x = ncols - slot_w(i)
+    if nrows > 0 and y + slot_h(i) > nrows:
+        y = nrows - slot_h(i)
+    if x < 0:
+        x = 0
+    if y < 0:
+        y = 0
+    hx[i] = x
+    hy[i] = y
+    save_home()
 
 
 def slot_of_widget(wid: i32) -> i32:
@@ -430,7 +498,7 @@ def close_all() -> None:
 
 # ---- Update
 def update(msg: i32, arg: i32) -> None:
-    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted, resizing, regrab
+    global loading, drawer, picking, sheet, item, pending, wloading, chosen, lifted, resizing, regrab, ncols, nrows
     i: i32
     if msg == LOADED:
         load_apps(arg)
@@ -495,9 +563,20 @@ def update(msg: i32, arg: i32) -> None:
             lifted = arg
     elif msg == DRAG_TO:
         if lifted >= 0 and arg >= 0 and arg < nh and arg != lifted:
+            hx[lifted] = -1   # back into the flow, at that place in the order
+            hy[lifted] = -1
             move_slot(lifted, arg)
             lifted = arg
+    elif msg == MOVE_CELL:
+        if lifted >= 0 and (hx[lifted] != arg % 64 or hy[lifted] != arg // 64):
+            pin_slot(lifted, arg % 64, arg // 64)
+    elif msg == GRID:
+        ncols = arg // 4096
+        nrows = arg % 4096
     elif msg == DROP:
+        if lifted >= 0 and hx[lifted] >= 0:
+            clear_cells(lifted)
+            save_home()
         if lifted >= 0 and (arg == 0 or regrab == 1):
             if hkind[lifted] == WIDGET:
                 resizing = lifted
@@ -510,6 +589,9 @@ def update(msg: i32, arg: i32) -> None:
         if resizing >= 0:
             hw[resizing] = arg // 4096
             hh[resizing] = arg % 4096
+            if hx[resizing] >= 0:
+                pin_slot(resizing, hx[resizing], hy[resizing])
+                clear_cells(resizing)
             save_home()
     elif msg == RESIZE_DONE:
         resizing = -1
@@ -635,6 +717,24 @@ def widget_rows(h: i32) -> i32:
     return k
 
 
+def view_cell(i: i32) -> None:
+    """Slot i's place on the grid: its pinned cell if it fits, and its span."""
+    s_clear(scratch)
+    if hx[i] >= 0 and hx[i] + slot_w(i) <= ncols:
+        s_add(scratch, "grid-column:")
+        s_add_num(scratch, hx[i] + 1)
+        s_add(scratch, ";grid-row:")
+        s_add_num(scratch, hy[i] + 1)
+        s_add(scratch, "/")
+    else:
+        s_add(scratch, "grid-row:")
+    s_add(scratch, "span ")
+    s_add_num(scratch, slot_h(i))
+    s_add(scratch, ";grid-column-end:span ")
+    s_add_num(scratch, slot_w(i))
+    attr_ref("style", scratch)
+
+
 def view_home_slot(i: i32) -> None:
     row: i32
     if hkind[i] == WIDGET:
@@ -645,12 +745,7 @@ def view_home_slot(i: i32) -> None:
         cls_if("resizing", i == resizing)
         attr_num("data-slot", i)
         # Its height spans whole rows of app tiles (64px rows, 8px gaps; style.css).
-        s_set(scratch, "grid-row:span ")
-        s_add_num(scratch, widget_rows(hh[i]))
-        if hw[i] > 0:
-            s_add(scratch, ";grid-column:span ")
-            s_add_num(scratch, hw[i])
-        attr_ref("style", scratch)
+        view_cell(i)
         # The native widget view is laid over slots marked live, so only mark
         # them while nothing covers the home screen. While one is resized the
         # others step aside, so nothing native covers its handles.
@@ -675,6 +770,8 @@ def view_home_slot(i: i32) -> None:
     cls("tile")
     cls_if("lifted", i == lifted)
     attr_num("data-slot", i)
+    if hx[i] >= 0:
+        view_cell(i)
     on_click(OPEN_HOME, i)
     on_longpress(LIFT, i)
     view_icon(icons[row])
@@ -715,6 +812,13 @@ def view_home() -> None:
     el("ul")
     cls("slots")
     cls_if("dragging", lifted >= 0)
+    if nrows > 0 and nh > 0:
+        # Rows down to the bottom of the screen, so empty cells there take apps too
+        # (4rem: the row height in style.css).
+        s_set(scratch, "grid-template-rows:repeat(")
+        s_add_num(scratch, nrows)
+        s_add(scratch, ",4rem)")
+        attr_ref("style", scratch)
     for i in range(nh):
         view_home_slot(i)
     end()

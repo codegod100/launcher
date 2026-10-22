@@ -73,6 +73,30 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await longpress(".slots .tile:nth-child(1)");
   await p.click(".sheet-item >> text=Move later"); await settle();
   assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
+  // the grid runs down the screen; an app dropped in an empty cell there stays in it,
+  // and the rest stay packed
+  const rows = await p.$eval(".slots", (s) => getComputedStyle(s).gridTemplateRows.split(" ").length);
+  assert.ok(rows >= 5, `rows fill the screen: ${rows}`);
+  const tileAt = (n) => p.locator(`.slots .tile:has-text("${n}")`).boundingBox();
+  const g0 = await tileAt("Gmail"), c0 = await tileAt("Chrome"), pitch = 64 + 8;
+  await p.mouse.move(g0.x + g0.width / 2, g0.y + g0.height / 2);
+  await p.mouse.down(); await p.waitForTimeout(650); await settle();
+  await p.mouse.move(g0.x + g0.width / 2 + 10, g0.y + g0.height / 2 + 4 * pitch, { steps: 6 }); await settle();
+  await p.mouse.up(); await settle();
+  const g1 = await tileAt("Gmail"), c1 = await tileAt("Chrome");
+  assert.ok(Math.abs(g1.y - g0.y - 4 * pitch) < 3, `left four rows down: ${g1.y - g0.y}`);
+  assert.equal(Math.round(c1.x), Math.round(g0.x), "Chrome moves up into the packed first cell");
+  await p.reload(); await p.waitForSelector(".slots .tile");
+  assert.ok(Math.abs((await tileAt("Gmail")).y - g1.y) < 3, "its cell is saved");
+  // dragging it back over an app puts it back in the packed order
+  const c2 = await tileAt("Chrome");
+  await p.mouse.move(g1.x + g1.width / 2, g1.y + g1.height / 2);
+  await p.mouse.down(); await p.waitForTimeout(650); await settle();
+  await p.mouse.move(c2.x + c2.width / 2, c2.y + c2.height / 2, { steps: 6 }); await settle();
+  await p.mouse.up(); await settle();
+  assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
+  assert.ok(Math.abs((await tileAt("Gmail")).y - c0.y) < 3, "back in the first row");
+  await p.mouse.click(5, 300); await settle(); // a tap on empty home ends the drag gesture
   // swipe down opens the drawer (and takes the widget off screen), search, long press adds
   const swipe = (y0, y1) => p.evaluate(([y0, y1]) => {
     const at = (y) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y });
