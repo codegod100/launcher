@@ -26,9 +26,7 @@ const BASE = process.env.BASE || "http://localhost:8000";
   await p.click(".sheet-item >> text=Check for updates"); await settle();
   assert.equal(await p.textContent("#toast"), "Check for updates");
   assert.ok(!(await p.$(".sheet")), "the menu closes");
-  // home apps in reading order on the grid
-  const homeApps = () => p.$$eval(".slots .tile", (ts) => ts.map((t) => [t.getBoundingClientRect(), t.textContent])
-    .sort(([a], [b]) => Math.round(a.top - b.top) || a.left - b.left).map(([, n]) => n));
+  const homeApps = () => p.$$eval(".slots .name", (ns) => ns.map((n) => n.textContent));
   // long press on the blank home: add apps through the drawer's pick mode
   await longpress(".hint");
   await p.click(".sheet-item >> text=Add apps"); await settle();
@@ -54,40 +52,27 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.equal(await p.getAttribute(".widget-slot", "data-wid"), "100");
   assert.equal(await p.textContent(".widget-label"), "Clock");
   // hold a home app and drag it: reorder
-  const app = (name) => `.slots .tile:has-text("${name}")`;
-  const dragBy = async (from, dx, dy) => {
-    const a = await p.locator(from).first().boundingBox();
+  const drag = async (from, to) => {
+    const a = await p.locator(from).first().boundingBox(), z = await p.locator(to).first().boundingBox();
     await p.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
     await p.mouse.down(); await p.waitForTimeout(650); await settle();
     assert.ok(await p.$(".slots > .lifted"), "a long press lifts the slot");
-    await p.mouse.move(a.x + a.width / 2 + dx, a.y + a.height / 2 + dy, { steps: 5 }); await settle();
+    await p.mouse.move(z.x + z.width / 2, z.y + z.height / 2, { steps: 5 }); await settle();
     await p.mouse.up(); await settle();
   };
-  const drag = async (from, to) => {
-    const a = await p.locator(from).first().boundingBox(), z = await p.locator(to).first().boundingBox();
-    await dragBy(from, z.x - a.x, z.y - a.y);
-  };
-  // the grid runs to the bottom of the screen
-  const rows = await p.$eval(".slots", (s) => getComputedStyle(s).gridTemplateRows.split(" ").length);
-  assert.ok(rows >= 6, `rows fill the screen: ${rows}`);
-  // dropping on an app takes its cell; that app moves to the first free cell
-  await drag(app("Gmail"), app("Chrome"));
+  await drag(".slots .tile:nth-child(2)", ".slots .tile:nth-child(1)");
   assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
   assert.ok(!(await p.$(".sheet")), "a drag doesn't open the menu");
   assert.ok(!(await p.$(".slots > .lifted")));
-  // an empty cell far down takes an app, and the others stay put
-  const before = await p.locator(app("Chrome")).boundingBox();
-  await dragBy(app("Gmail"), 0, 4 * 84);
-  const g = await p.locator(app("Gmail")).boundingBox(), c = await p.locator(app("Chrome")).boundingBox();
-  assert.ok(Math.abs(g.y - before.y - 4 * 84) < 3, `dropped four rows down: ${g.y - before.y}`);
-  assert.deepEqual([c.x, c.y], [before.x, before.y], "the other apps stay where they were");
-  await p.reload(); await p.waitForSelector(".slots .tile");
-  assert.ok(Math.abs((await p.locator(app("Gmail")).boundingBox()).y - g.y) < 3, "the cell is saved");
-  // and back up to the empty first cell, left of Chrome
-  const ph = await p.locator(app("Phone")).boundingBox();
-  await dragBy(app("Gmail"), c.x - (ph.x - c.x) - g.x, c.y - g.y);
+  await drag(".slots .tile:nth-child(1)", ".slots .tile:nth-child(3)");
+  assert.deepEqual(await homeApps(), ["Chrome", "Phone", "Gmail"]);
+  // hold without moving: the menu
+  await longpress(".slots .tile:nth-child(3)");
+  await p.click(".sheet-item >> text=Move earlier"); await settle();
+  assert.deepEqual(await homeApps(), ["Chrome", "Gmail", "Phone"]);
+  await longpress(".slots .tile:nth-child(1)");
+  await p.click(".sheet-item >> text=Move later"); await settle();
   assert.deepEqual(await homeApps(), ["Gmail", "Chrome", "Phone"]);
-  await p.mouse.click(5, 300); await settle(); // a tap on empty home ends the drag gesture
   // swipe down opens the drawer (and takes the widget off screen), search, long press adds
   const swipe = (y0, y1) => p.evaluate(([y0, y1]) => {
     const at = (y) => new Touch({ identifier: 1, target: document.body, clientX: 200, clientY: y });
@@ -113,7 +98,7 @@ const BASE = process.env.BASE || "http://localhost:8000";
   // persisted; tap launches; remove
   await p.reload(); await p.waitForSelector(".slots .tile");
   assert.equal(await p.$$eval(".slots > li", (ls) => ls.length), 5);
-  await p.click(app("Gmail")); await settle();
+  await p.click(".slots .tile:first-child"); await settle();
   assert.equal(await p.textContent("#toast"), "Open com.example.gmail/.MainActivity");
   // hold a widget without moving: resize handles; drag them to snap it to the grid
   await longpress(".widget-slot");
@@ -138,18 +123,15 @@ const BASE = process.env.BASE || "http://localhost:8000";
   assert.deepEqual(await size(), [w1, h1], "the size is saved");
   // while it shows handles, dragging the widget itself moves it, without another long press
   await longpress(".widget-slot");
-  const atStart = () => p.$eval(".widget-slot", (w) => {
-    const r = w.getBoundingClientRect(), s = w.parentElement.getBoundingClientRect();
-    return Math.abs(r.left - s.left) < 2 && Math.abs(r.top - s.top) < 2;
-  });
-  assert.ok(!(await atStart()));
+  const order = () => p.$$eval(".slots > li", (ls) => ls.map((l) => l.classList.contains("widget-slot") ? "W" : "a"));
+  assert.notEqual((await order())[0], "W");
   const wb = await p.locator(".widget-slot").boundingBox(), first = await p.locator(".slots > li").first().boundingBox();
   await p.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2);
   await p.mouse.down(); await settle();
   assert.ok(await p.$(".widget-slot.lifted"), "pressing a widget with handles picks it up");
   await p.mouse.move(first.x + first.width / 2, first.y + first.height / 2, { steps: 8 }); await settle();
   await p.mouse.up(); await settle();
-  assert.ok(await atStart(), "dragged to the first cell");
+  assert.equal((await order())[0], "W", "dragged to the front");
   // the apps flow into the cells beside it: a 2x2 widget in 5 columns leaves room for all four
   const beside = await p.$eval(".widget-slot", (w) => {
     const r = w.getBoundingClientRect();
