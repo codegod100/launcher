@@ -10,8 +10,10 @@ android {
         applicationId "dev.ultra.launcher"
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "0.1"
+        // CI passes -PversionCode=<workflow run number>; the in-app updater compares it
+        // with the versionCode in the launcher-latest release's version.json.
+        versionCode((project.findProperty("versionCode") ?: "1") as Integer)
+        versionName("0.1." + versionCode)
     }
 
     compileOptions {

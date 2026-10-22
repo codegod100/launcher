@@ -49,7 +49,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
       - name: Build the APK
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug
+        # The run number only grows, so each build's versionCode is newer than the last
+        # (it restarts if this workflow is renamed; bump past the old numbers then).
+        run: ./gradlew --no-daemon assembleDebug -PversionCode=${{ github.run_number }}
       - uses: actions/upload-artifact@v5
         with:
           name: ultra-launcher-apk
@@ -61,7 +63,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk ultra-launcher.apk
+          # The launcher's updater reads this to tell whether the APK is newer than it.
+          echo '{"versionCode": ${{ github.run_number }}, "commit": "'"$GITHUB_SHA"'"}' > version.json
           gh release delete launcher-latest --yes --cleanup-tag || true
-          gh release create launcher-latest ultra-launcher.apk --prerelease --target "$GITHUB_SHA" \
+          gh release create launcher-latest ultra-launcher.apk version.json --prerelease --target "$GITHUB_SHA" \
             --title "ultra launcher (latest build)" \
             --notes "Debug-signed APK of android/ built from $GITHUB_SHA. Install it, press Home, and pick ultra Home."

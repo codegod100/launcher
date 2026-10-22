@@ -75,7 +75,8 @@ import java.util.concurrent.Executors;
  *   wicon?p=PROV    the provider's icon as a PNG
  *
  * and exposes window.Android (launch, appInfo, addWidget, removeWidget, placeWidgets,
- * widgetLimits, excludeGestures, openSettings, pickWallpaper, openRecents, haptic)
+ * widgetLimits, excludeGestures, openSettings, pickWallpaper, openRecents, checkUpdates,
+ * haptic)
  * for the app's @jscall imports and index.html.
  *
  * Widgets are real AppWidgetHostViews in a layer above the WebView. The page reports where
@@ -83,6 +84,8 @@ import java.util.concurrent.Executors;
  * changes, the home button, back, a new widget and a long press on a widget reach
  * the page as window.ultraHome.reload() / home() / back() / widgetAdded(id) /
  * widgetMenu(id).
+ *
+ * Updater keeps the launcher itself up to date from the launcher-latest release.
  */
 public class MainActivity extends Activity {
     static final String HOST = "appassets.androidplatform.net";
@@ -181,6 +184,7 @@ public class MainActivity extends Activity {
     protected void onStart() {
         super.onStart();
         widgetHost.startListening();
+        Updater.check(this, false);
     }
 
     @Override
@@ -794,6 +798,10 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void openRecents() {
             main.post(MainActivity.this::openRecents);
+        }
+
+        @JavascriptInterface public void checkUpdates() {
+            Updater.check(MainActivity.this, true);
         }
     }
 

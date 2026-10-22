@@ -21,6 +21,11 @@ const BASE = process.env.BASE || "http://localhost:8000";
     await p.mouse.move(r.x + r.width / 2, r.y + r.height * fy);
     await p.mouse.down(); await p.waitForTimeout(650); await p.mouse.up(); await settle();
   };
+  // the home menu's update check goes to the shell and closes the menu
+  await longpress(".hint");
+  await p.click(".sheet-item >> text=Check for updates"); await settle();
+  assert.equal(await p.textContent("#toast"), "Check for updates");
+  assert.ok(!(await p.$(".sheet")), "the menu closes");
   const homeApps = () => p.$$eval(".slots .name", (ns) => ns.map((n) => n.textContent));
   // long press on the blank home: add apps through the drawer's pick mode
   await longpress(".hint");

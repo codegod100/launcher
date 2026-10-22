@@ -52,6 +52,11 @@ def open_recents() -> None:
     pass
 
 @jscall
+def check_updates() -> None:
+    """Look for a newer launcher build and install it (the shell shows its own progress)."""
+    pass
+
+@jscall
 def haptic() -> None:
     pass
 
@@ -95,6 +100,7 @@ CHOOSE_FIRST_WIDGET: Const[i32] = 39
 RESIZE: Const[i32] = 40        # arg: columns * 4096 + height in px for the widget being resized
 RESIZE_DONE: Const[i32] = 41
 GRAB: Const[i32] = 42          # arg: the widget slot showing handles, picked up by its body
+CHECK_UPDATES: Const[i32] = 43
 
 CAP: Const[i32] = 512
 HOME_CAP: Const[i32] = 40
@@ -553,6 +559,9 @@ def update(msg: i32, arg: i32) -> None:
         sheet = NONE
     elif msg == RECENTS:
         open_recents()
+    elif msg == CHECK_UPDATES:
+        check_updates()
+        sheet = NONE
     elif msg == NOTICE_DONE:
         if arg == notice_gen:
             s_clear(notice)
@@ -804,6 +813,7 @@ def view_sheet() -> None:
         sheet_btn("Add widget", PICK_WIDGET, 0)
         sheet_btn("Wallpaper", WALLPAPER, 0)
         sheet_btn("Settings", SETTINGS, 0)
+        sheet_btn("Check for updates", CHECK_UPDATES, 0)
     elif sheet == SHEET_ITEM and item >= 0:
         el("h2")
         cls("sheet-title")

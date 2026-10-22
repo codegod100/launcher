@@ -32,6 +32,7 @@
       openSettings: () => toast("Open system settings"),
       pickWallpaper: () => toast("Pick a wallpaper"),
       openRecents: () => toast("Show open windows"),
+      checkUpdates: () => toast("Check for updates"),
       showKeyboard: () => {},
       hideKeyboard: () => {},
       haptic: () => navigator.vibrate?.(10),
@@ -125,6 +126,7 @@
         open_settings: () => host.openSettings(),
         pick_wallpaper: () => host.pickWallpaper(),
         open_recents: () => host.openRecents(),
+        check_updates: () => host.checkUpdates(),
         haptic: () => host.haptic(),
       }),
     });
