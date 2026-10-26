@@ -49,7 +49,10 @@
                 s.classList.contains("resizing") ? 1 : 0]; // its body moves it instead of taking touches
       });
       const j = JSON.stringify(slots);
-      if (j !== placed) { placed = j; host.placeWidgets(j); }
+      // The drawer unmarks the slots, but the home screen under it doesn't move, so the
+      // widgets stay where they were and cover() hides them as it slides over them.
+      const underDrawer = document.querySelector(".drawer") && !document.querySelector(".sheet-overlay");
+      if (j !== placed && !underDrawer) { placed = j; host.placeWidgets(j); }
       // Keep the system's edge swipes (back) off the resize handles.
       const handles = JSON.stringify([...document.querySelectorAll(".resize-handle")].map((h) => {
         const r = h.getBoundingClientRect();
@@ -58,6 +61,27 @@
       if (handles !== excluded) { excluded = handles; host.excludeGestures?.(handles); }
     };
     let excluded = "[]";
+
+    // Native widgets sit above the page, so the drawer can't cover them by itself. While it
+    // slides down the shell hides them above its bottom edge each frame (coverWidgets(y),
+    // CSS px; -1 once it covers the screen), so they stay until the drawer reaches them.
+    // The edge is reported a little ahead (by its speed), since the shell trails a frame.
+    let coverY = 0, coverLast = 0, coverLoop = false;
+    const cover = () => {
+      const d = document.querySelector(".drawer");
+      let y = 0;
+      if (d) {
+        const b = d.getBoundingClientRect().bottom;
+        y = b >= innerHeight - 1 ? -1 : Math.max(0, Math.ceil(b + 2 * Math.max(0, b - coverLast)));
+        coverLast = b;
+        if (y >= innerHeight) y = innerHeight - 1;
+      } else coverLast = 0;
+      if (y !== coverY) { coverY = y; host.coverWidgets?.(y); }
+      if (d && y !== -1 && !coverLoop) {
+        coverLoop = true;
+        requestAnimationFrame(() => { coverLoop = false; cover(); });
+      }
+    };
 
     // Opening the drawer puts the cursor in its search box and raises the keyboard
     // (a WebView won't show it for a focus() the user didn't tap, so the shell does).
@@ -119,7 +143,7 @@
 
     let ready = false; // the grid code below exists and app is mounted
     const app = await mount("#app", "./app.wasm", {
-      onRender: () => { fillIcons(); place(); watchDrawer(); if (ready) measureGrid(); },
+      onRender: () => { fillIcons(); place(); cover(); watchDrawer(); if (ready) measureGrid(); },
       imports: ({ strs }) => ({
         launch: (h) => host.launch(strs[h]),
         app_info: (h) => host.appInfo(strs[h]),

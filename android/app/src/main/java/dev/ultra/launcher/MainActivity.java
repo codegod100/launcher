@@ -96,7 +96,8 @@ public class MainActivity extends Activity {
     static final int REQ_BIND = 1, REQ_CONFIGURE = 2;
 
     private WebView web;
-    private FrameLayout widgetLayer;
+    private CoverLayer widgetLayer;
+    private long coverRequest; // the latest coverWidgets, so a stale uncover is dropped
     private AppWidgetManager widgets;
     private AppWidgetHost widgetHost;
     private final Map<Integer, AppWidgetHostView> widgetViews = new HashMap<>();
@@ -173,7 +174,7 @@ public class MainActivity extends Activity {
         });
         widgetViews.clear();
         widgetSizes.clear();
-        widgetLayer = new FrameLayout(this);
+        widgetLayer = new CoverLayer(this);
         FrameLayout root = new FrameLayout(this);
         root.addView(web);
         root.addView(widgetLayer);
@@ -604,6 +605,30 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * Holds the widget views. The app drawer slides down over the page, so the widgets
+     * must be hidden above its edge: cover(top) clips them (and their touches) above top
+     * px, -1 hides them all, 0 shows them all.
+     */
+    static final class CoverLayer extends FrameLayout {
+        private int top;
+
+        CoverLayer(Context c) { super(c); }
+
+        void cover(int y) {
+            if (y == top) return;
+            top = y;
+            setVisibility(y < 0 ? View.INVISIBLE : View.VISIBLE);
+            setClipBounds(y > 0 ? new Rect(0, y, Math.max(getWidth(), 1), Math.max(getHeight(), y + 1)) : null);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent ev) {
+            if (top != 0 && ev.getActionMasked() == MotionEvent.ACTION_DOWN && (top < 0 || ev.getY() < top)) return false;
+            return super.dispatchTouchEvent(ev);
+        }
+    }
+
     static final class WidgetView extends AppWidgetHostView {
         private final MainActivity home;
         private final int id;
@@ -777,6 +802,21 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void placeWidgets(String json) {
             main.post(() -> MainActivity.this.placeWidgets(json));
+        }
+
+        /** The drawer covers the page down to y (CSS px); -1 is all of it, 0 none. */
+        @JavascriptInterface public void coverWidgets(int y) {
+            main.post(() -> {
+                long n = ++coverRequest;
+                if (y != 0) { widgetLayer.cover(y < 0 ? -1 : Math.round(y * getResources().getDisplayMetrics().density)); return; }
+                // The drawer is gone from the page; show the widgets once the page has
+                // painted without it, so they don't flash over it for a frame.
+                web.postVisualStateCallback(n, new WebView.VisualStateCallback() {
+                    @Override public void onComplete(long requestId) {
+                        if (requestId == coverRequest) widgetLayer.cover(0);
+                    }
+                });
+            });
         }
 
         @JavascriptInterface public String widgetLimits(int id) {
