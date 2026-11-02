@@ -97,7 +97,7 @@ public class HomeActivity extends QtActivity {
     };
 
     @Override
-    protected void onCreate(Bundle state) {
+    public void onCreate(Bundle state) {
         self = this;
         super.onCreate(state);
         launcher = getSystemService(LauncherApps.class);
@@ -158,20 +158,20 @@ public class HomeActivity extends QtActivity {
     }
 
     @Override
-    protected void onStart() {
+    public void onStart() {
         super.onStart();
         widgetHost.startListening();
         Updater.check(this, false);
     }
 
     @Override
-    protected void onStop() {
+    public void onStop() {
         super.onStop();
         widgetHost.stopListening();
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         launcher.unregisterCallback(packages);
         if (self == this) self = null;
         super.onDestroy();
@@ -179,7 +179,7 @@ public class HomeActivity extends QtActivity {
 
     // The home button while we are already in front.
     @Override
-    protected void onNewIntent(Intent intent) {
+    public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (qtReady) Native.homePressed();
     }
@@ -464,7 +464,7 @@ public class HomeActivity extends QtActivity {
     }
 
     @Override
-    protected void onActivityResult(int req, int result, Intent data) {
+    public void onActivityResult(int req, int result, Intent data) {
         super.onActivityResult(req, result, data);
         if (pendingWidget == -1 || (req != REQ_BIND && req != REQ_CONFIGURE)) return;
         if (result != RESULT_OK) {
