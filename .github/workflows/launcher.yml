@@ -65,7 +65,14 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk ultra-launcher.apk
           # The launcher's updater reads this to tell whether the APK is newer than it.
           echo '{"versionCode": ${{ github.run_number }}, "commit": "'"$GITHUB_SHA"'"}' > version.json
-          gh release delete launcher-latest --yes --cleanup-tag || true
+          # Swap the files in place, the APK first, so the release never disappears
+          # under a phone checking for updates.
+          if gh release view launcher-latest >/dev/null 2>&1; then
+            gh release upload launcher-latest ultra-launcher.apk --clobber
+            gh release upload launcher-latest version.json --clobber
+            git push -f "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" "$GITHUB_SHA:refs/tags/launcher-latest"
+            exit 0
+          fi
           gh release create launcher-latest ultra-launcher.apk version.json --prerelease --target "$GITHUB_SHA" \
             --title "ultra launcher (latest build)" \
             --notes "Debug-signed APK of android/ built from $GITHUB_SHA. Install it, press Home, and pick ultra Home."
@@ -138,7 +145,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo '{"versionCode": ${{ github.run_number }}, "commit": "'"$GITHUB_SHA"'"}' > version.json
-          gh release delete launcher-qt-latest --yes --cleanup-tag || true
+          # Swap the files in place, the APK first, so the release never disappears
+          # under a phone checking for updates.
+          if gh release view launcher-qt-latest >/dev/null 2>&1; then
+            gh release upload launcher-qt-latest ultra-launcher.apk --clobber
+            gh release upload launcher-qt-latest version.json --clobber
+            git push -f "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" "$GITHUB_SHA:refs/tags/launcher-qt-latest"
+            exit 0
+          fi
           gh release create launcher-qt-latest ultra-launcher.apk version.json --prerelease --target "$GITHUB_SHA" \
             --title "ultra launcher, Qt build (latest)" \
             --notes "The Qt Quick rewrite (qt/), built from $GITHUB_SHA. It installs over the WebView launcher (same package and key) as \"ultra Home (Qt)\"."
