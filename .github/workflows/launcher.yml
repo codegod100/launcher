@@ -69,3 +69,76 @@ jobs:
           gh release create launcher-latest ultra-launcher.apk version.json --prerelease --target "$GITHUB_SHA" \
             --title "ultra launcher (latest build)" \
             --notes "Debug-signed APK of android/ built from $GITHUB_SHA. Install it, press Home, and pick ultra Home."
+
+  # The Qt Quick rewrite in qt/: the grid logic and an end-to-end test of the QML UI on
+  # desktop Qt (offscreen), then an APK. Until it takes over, it installs as its own app
+  # (dev.ultra.launcher.qt, "ultra Home (Qt)") from the launcher-qt-latest prerelease.
+  qt-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          cache: true
+      - name: Grid layout test
+        run: node qt/tests/layout.test.mjs
+      - name: Build and run the end-to-end test
+        run: |
+          sudo apt-get install -y ninja-build
+          cmake -S qt -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+          QT_QPA_PLATFORM=offscreen build/ultrahome_e2e
+
+  qt-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          target: android
+          arch: android_arm64_v8a
+          cache: true
+      - name: Android NDK for Qt 6.8
+        run: |
+          sudo apt-get install -y ninja-build
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;26.1.10909125" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> "$GITHUB_ENV"
+      - name: Build the APK
+        # Signed with the same committed key as the WebView build, so the Qt build can
+        # later install over it.
+        env:
+          QT_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/debug.keystore
+          QT_ANDROID_KEYSTORE_ALIAS: androiddebugkey
+          QT_ANDROID_KEYSTORE_STORE_PASS: android
+          QT_ANDROID_KEYSTORE_KEY_PASS: android
+        run: |
+          "$QT_ROOT_DIR/bin/qt-cmake" -S qt -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DANDROID_SDK_ROOT="$ANDROID_SDK_ROOT" -DANDROID_NDK_ROOT="$ANDROID_NDK_ROOT" \
+            -DQT_HOST_PATH="$QT_HOST_PATH" -DQT_ANDROID_SIGN_APK=ON \
+            -DVERSION_CODE=${{ github.run_number }}
+          cmake --build build-android --target apk
+          apk=$(find build-android -name "*-signed.apk" | head -1)
+          test -n "$apk" || { find build-android -name "*.apk"; exit 1; }
+          cp "$apk" ultra-launcher.apk
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ultra-launcher-qt-apk
+          path: ultra-launcher.apk
+      - name: Publish the launcher-qt-latest release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo '{"versionCode": ${{ github.run_number }}, "commit": "'"$GITHUB_SHA"'"}' > version.json
+          gh release delete launcher-qt-latest --yes --cleanup-tag || true
+          gh release create launcher-qt-latest ultra-launcher.apk version.json --prerelease --target "$GITHUB_SHA" \
+            --title "ultra launcher, Qt build (latest)" \
+            --notes "The Qt Quick rewrite (qt/), built from $GITHUB_SHA. It installs next to the WebView launcher as \"ultra Home (Qt)\". Press Home and pick it to try it."

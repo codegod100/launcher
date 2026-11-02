@@ -26,3 +26,14 @@ cd android && ./gradlew assembleDebug   # needs JDK 17 and the Android SDK
 `pixi run serve` serves `web/` on http://localhost:8000. In a desktop browser the launcher runs against the demo JSON files, shows a toast instead of launching, and draws widgets as labelled placeholders. Click the bar at the top to open the drawer.
 
 Every push to ultra's main publishes a new `ultra` package. To pick it up, run `pixi update ultra`, rebuild, and commit the rebuilt `web/` files.
+
+## Qt rewrite (in progress)
+
+`qt/` is the launcher rewritten as a Qt Quick (QML) app for Android, replacing ultra and the WebView. `qt/qml` is the UI (`Main.qml`, with the grid packing in `Layout.js`), `qt/src` a thin C++ backend, and `qt/android` the Java side (`HomeActivity`, a `QtActivity` that lists apps, draws icons, launches, and hosts the native widget views over the QML slots). Until it reaches parity it installs as its own app, **ultra Home (Qt)** (`dev.ultra.launcher.qt`), from the [`launcher-qt-latest` release](https://github.com/codegod100/launcher/releases/tag/launcher-qt-latest).
+
+```sh
+node qt/tests/layout.test.mjs                        # grid packing
+cmake -S qt -B build && cmake --build build          # desktop build, needs Qt 6.8+
+build/ultrahome                                      # try it against the demo apps
+QT_QPA_PLATFORM=offscreen build/ultrahome_e2e        # end-to-end test of the UI
+```
