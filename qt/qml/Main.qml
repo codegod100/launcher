@@ -264,7 +264,7 @@ Window {
         Qt.callLater(() => { providers = Host.widgetProviders(); wloading = false; });
     }
     readonly property var shownProviders: {
-        const q = widgetSearch.text.toLowerCase(), out = [];
+        const q = widgetSearch.shown.toLowerCase(), out = [];
         for (let i = 0; i < providers.length; i++) {
             const p = providers[i];
             if (!q || p.label.toLowerCase().indexOf(q) >= 0 || p.app.toLowerCase().indexOf(q) >= 0) out.push(i);

@@ -249,6 +249,16 @@ int main(int argc, char *argv[]) {
     snap("drawer");
     js("drawer.query = 'ma'");
     eq(js("drawer.shown.map(i => apps[i].label).join(',')"), "Gmail,Maps", "the search filters the list");
+    {
+        // the clear button empties the search and shows every app again
+        auto *clear = win->findChild<QQuickItem *>("searchClear");
+        check(clear && clear->isVisible(), "the search shows a clear button");
+        if (clear) tap(clear->mapToScene(QPointF(clear->width() / 2, clear->height() / 2)));
+        eq(js("drawer.query"), "", "tapping it clears the search");
+        eq(js("drawer.shown.length === apps.length"), true, "and every app shows again");
+        check(clear && !clear->isVisible(), "the clear button goes");
+        js("drawer.query = 'ma'");
+    }
     js("drawer.openFirst()");
     settle(300);
     eq(js("notice"), "Open com.example.gmail/.MainActivity", "opening the first match launches it");

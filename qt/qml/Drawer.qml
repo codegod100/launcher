@@ -16,7 +16,7 @@ Item {
     property alias query: search.text
     readonly property real edge: y + height   // the drawer's bottom edge, for covering widgets
     readonly property var shown: {
-        const q = search.text.toLowerCase();
+        const q = search.shown.toLowerCase();
         const out = [];
         for (let i = 0; i < apps.length; i++)
             if (!q || apps[i].label.toLowerCase().indexOf(q) >= 0) out.push(i);
@@ -34,7 +34,7 @@ Item {
     Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
     function openFirst() {
-        if (shown.length > 0 && search.text.length > 0) openApp(shown[0]);
+        if (shown.length > 0 && search.shown.length > 0) openApp(shown[0]);
     }
 
     onOpenChanged: {
