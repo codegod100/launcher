@@ -29,7 +29,7 @@ Every push to ultra's main publishes a new `ultra` package. To pick it up, run `
 
 ## Qt rewrite (in progress)
 
-`qt/` is the launcher rewritten as a Qt Quick (QML) app for Android, replacing ultra and the WebView. `qt/qml` is the UI (`Main.qml`, with the grid packing in `Layout.js`), `qt/src` a thin C++ backend, and `qt/android` the Java side (`HomeActivity`, a `QtActivity` that lists apps, draws icons, launches, and hosts the native widget views over the QML slots). Until it reaches parity it installs as its own app, **ultra Home (Qt)** (`dev.ultra.launcher.qt`), from the [`launcher-qt-latest` release](https://github.com/codegod100/launcher/releases/tag/launcher-qt-latest).
+`qt/` is the launcher rewritten as a Qt Quick (QML) app for Android, replacing ultra and the WebView. `qt/qml` is the UI (`Main.qml`, with the grid packing in `Layout.js`), `qt/src` a thin C++ backend, and `qt/android` the Java side (`HomeActivity`, a `QtActivity` that lists apps, draws icons, launches, and hosts the native widget views over the QML slots). It uses the same package (`dev.ultra.launcher`) and key as the WebView build, so it installs over it, as **ultra Home (Qt)**, from the [`launcher-qt-latest` release](https://github.com/codegod100/launcher/releases/tag/launcher-qt-latest).
 
 ```sh
 node qt/tests/layout.test.mjs                        # grid packing

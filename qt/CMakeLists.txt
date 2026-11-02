@@ -49,7 +49,7 @@ target_link_libraries(ultrahome PRIVATE launcher_uiplugin launcher_ui Qt6::Quick
 
 set_target_properties(ultrahome PROPERTIES
     QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
-    QT_ANDROID_PACKAGE_NAME "dev.ultra.launcher.qt"
+    QT_ANDROID_PACKAGE_NAME "dev.ultra.launcher"
     QT_ANDROID_VERSION_CODE "${VERSION_CODE}"
     QT_ANDROID_VERSION_NAME "0.2.${VERSION_CODE}"
     QT_ANDROID_MIN_SDK_VERSION 28

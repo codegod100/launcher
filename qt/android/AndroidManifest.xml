@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!-- Qt fills in the %%INSERT_...%% markers when it builds the APK (androiddeployqt). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="dev.ultra.launcher.qt"
+    package="dev.ultra.launcher"
     android:installLocation="auto"
     android:versionCode="-- %%INSERT_VERSION_CODE%% --"
     android:versionName="-- %%INSERT_VERSION_NAME%% --">
