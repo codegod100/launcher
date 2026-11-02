@@ -79,7 +79,7 @@ jobs:
 
   # The Qt Quick rewrite in qt/: the grid logic and an end-to-end test of the QML UI on
   # desktop Qt (offscreen), then an APK. Its package is dev.ultra.launcher with the same key, so it installs over the WebView build
-  # ("ultra Home (Qt)"); it updates itself from the launcher-qt-latest prerelease.
+  # ; it updates itself from the launcher-qt-latest prerelease.
   qt-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -155,4 +155,4 @@ jobs:
           fi
           gh release create launcher-qt-latest ultra-launcher.apk version.json --prerelease --target "$GITHUB_SHA" \
             --title "ultra launcher, Qt build (latest)" \
-            --notes "The Qt Quick rewrite (qt/), built from $GITHUB_SHA. It installs over the WebView launcher (same package and key) as \"ultra Home (Qt)\"."
+            --notes "The Qt Quick rewrite (qt/), built from $GITHUB_SHA. It installs over the WebView launcher (same package and key)."
