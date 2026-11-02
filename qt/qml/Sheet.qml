@@ -9,6 +9,8 @@ Item {
     property real bottomInset: 0
     property real maxWidth: 560
     default property alias content: column.data
+    // Where the panel's top edge is, for hiding native widgets under it.
+    readonly property real edge: panel.y
     signal closeRequested()
     anchors.fill: parent
     visible: open || panel.y < height

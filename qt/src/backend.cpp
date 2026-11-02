@@ -198,6 +198,16 @@ void Backend::coverWidgets(qreal y) {
 #endif
 }
 
+void Backend::sheetWidgets(qreal y, bool dim) {
+#ifdef Q_OS_ANDROID
+    const int py = y <= 0 ? 0 : int(std::floor(y * dpr()));
+    QJniObject::callStaticMethod<void>(kActivity, "sheetWidgets", "(IZ)V", jint(py), jboolean(dim));
+#else
+    Q_UNUSED(y);
+    Q_UNUSED(dim);
+#endif
+}
+
 QVariantMap Backend::widgetLimits(int id) const {
 #ifdef Q_OS_ANDROID
     const QJsonObject o = QJsonDocument::fromJson(

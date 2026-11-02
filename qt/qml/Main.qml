@@ -297,12 +297,13 @@ Window {
     }
 
     // ---- telling Host where the live widget slots are
-    // A slot is live (its native view is shown over it) while nothing covers the home
-    // screen. While one is resized the others step aside, so nothing covers its handles.
-    // Under the open drawer the widgets stay put and the drawer's edge covers them.
+    // A slot is live (its native view is shown over it) unless the drawer is open. While
+    // one is resized the others step aside, so nothing covers its handles. Under the
+    // open drawer the widgets stay put and the drawer's edge covers them; under a sheet
+    // they stay put too, dimmed, and hidden below the sheet's edge (sheetCover).
     readonly property var liveSlots: {
         const out = [];
-        if (drawerOpen || sheet !== "") return out;
+        if (drawerOpen) return out;
         for (let i = 0; i < home.length; i++) {
             const s = home[i], b = boxOf(i);
             if (s.kind !== "widget" || !b || (resizing >= 0 && i !== resizing)) continue;
@@ -314,7 +315,7 @@ Window {
     property string placed: ""
     function place() {
         const j = JSON.stringify(liveSlots);
-        if (j === placed || (drawerOpen && sheet === "")) return;
+        if (j === placed || drawerOpen) return;
         placed = j;
         Host.placeWidgets(liveSlots);
     }
@@ -350,6 +351,25 @@ Window {
         const gy = y < 0 ? -1 : homeContent.mapToGlobal(0, y).y;
         if (gy !== coverSent) { coverSent = gy; Host.coverWidgets(gy); }
     }
+    // Native widgets under a sheet: hidden below its top edge, the rest dimmed.
+    readonly property var sheets: [menuSheet, itemSheet, appSheet, widgetSheet]
+    readonly property real sheetEdge: {
+        let y = 0;
+        for (const s of sheets) if (s.visible) y = y > 0 ? Math.min(y, s.edge) : Math.max(1, s.edge);
+        return y;
+    }
+    readonly property bool sheetDim: sheets.some(s => s.open)
+    property string sheetSent: "0,false"
+    function sheetCover() {
+        const y = sheetEdge > 0 ? homeContent.mapToGlobal(0, sheetEdge).y : 0;
+        const k = Math.round(y) + "," + sheetDim;
+        if (k === sheetSent) return;
+        sheetSent = k;
+        Host.sheetWidgets(y, sheetDim);
+    }
+    onSheetEdgeChanged: sheetCover()
+    onSheetDimChanged: sheetCover()
+
     onFrameSwapped: if (uncoverPending) { uncoverPending = false; coverSent = 0; Host.coverWidgets(0); }
 
     // ---- Host
@@ -464,7 +484,7 @@ Window {
                         readonly property bool isLifted: index === root.lifted
                         readonly property bool isResizing: index === root.resizing
                         readonly property bool live: Host.android && isWidget && !root.drawerOpen
-                            && root.sheet === "" && (root.resizing < 0 || isResizing)
+                            && (root.resizing < 0 || isResizing)
                         readonly property int row: isWidget ? -1 : (root.appRow[s.str] ?? -1)
                         objectName: "slot" + index
                         visible: b !== null

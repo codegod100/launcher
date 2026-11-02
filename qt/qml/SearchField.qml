@@ -20,11 +20,15 @@ Rectangle {
 
     function focusNow() { input.forceActiveFocus(); Qt.inputMethod.show() }
     // Empty the box, including a word still being composed, and keep typing in it.
+    // Android commits a composing word asynchronously, so it can land after the clear:
+    // clear again once it has.
     function clearText() {
-        Qt.inputMethod.reset();
+        Qt.inputMethod.commit();
         input.clear();
         input.forceActiveFocus();
+        clearAgain.restart();
     }
+    Timer { id: clearAgain; interval: 120; onTriggered: input.clear() }
 
     TextInput {
         id: input
@@ -37,7 +41,9 @@ Rectangle {
         selectionColor: Qt.rgba(1, 1, 1, .35)
         font.pixelSize: root.fontSize
         clip: true
-        inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+        // No suggestions: Android keyboards then type straight into the box rather than
+        // composing words, so the list filters on every key.
+        inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhSensitiveData | Qt.ImhNoAutoUppercase
         onAccepted: root.accepted()
         Keys.onEscapePressed: root.escaped()
         Text {

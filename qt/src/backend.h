@@ -46,6 +46,8 @@ public:
     Q_INVOKABLE void placeWidgets(const QVariantList &list);
     // The drawer covers the screen down to global logical y; -1 all of it, 0 none.
     Q_INVOKABLE void coverWidgets(qreal y);
+    // A sheet covers the screen from global logical y down (0: none) and dims the rest.
+    Q_INVOKABLE void sheetWidgets(qreal y, bool dim);
     // {w, minW, minH, maxW, maxH (0: no limit), h, v} in logical px.
     Q_INVOKABLE QVariantMap widgetLimits(int id) const;
     // [{x, y, w, h}] in global logical px: no system back swipe there.

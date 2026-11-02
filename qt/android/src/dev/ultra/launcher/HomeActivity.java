@@ -546,6 +546,16 @@ public class HomeActivity extends QtActivity {
         });
     }
 
+    /** A sheet covers the screen from y (screen px) down, and dims the rest; y 0: no sheet. */
+    static void sheetWidgets(int y, boolean dim) {
+        onMain(a -> {
+            if (a.widgetLayer == null) return;
+            if (y <= 0) { a.widgetLayer.sheet(0, dim); return; }
+            a.widgetLayer.getLocationOnScreen(a.layerAt);
+            a.widgetLayer.sheet(Math.max(1, y - a.layerAt[1]), dim);
+        });
+    }
+
     /**
      * Lay widget views over QML's live slots: [[id, x, y, w, h, editing], ...] in screen
      * px, where editing is 1 for the one showing resize handles.
@@ -623,26 +633,49 @@ public class HomeActivity extends QtActivity {
     }
 
     /**
-     * Holds the widget views. The app drawer slides down over the home screen, so the
-     * widgets must be hidden above its edge: cover(top) clips them (and their touches)
-     * above top px, -1 hides them all, 0 shows them all. Touches that land on no widget
-     * fall through to Qt underneath.
+     * Holds the widget views. Qt can't draw over them, so the layer clips them itself:
+     * the app drawer slides down over the home screen, so cover(top) hides them above
+     * its edge (-1 all of them, 0 none); a sheet rises from the bottom, so sheet(bottom,
+     * dim) hides them below its top edge (0: no sheet) and dims the rest like the
+     * sheet's backdrop, which then takes their touches (a tap closes the sheet). Touches
+     * that land on no widget fall through to Qt underneath.
      */
     static final class CoverLayer extends FrameLayout {
-        private int top;
+        private int top, bottom;
+        private boolean dim;
 
         CoverLayer(Context c) { super(c); }
 
         void cover(int y) {
             if (y == top) return;
             top = y;
-            setVisibility(y < 0 ? View.INVISIBLE : View.VISIBLE);
-            setClipBounds(y > 0 ? new Rect(0, y, Math.max(getWidth(), 1), Math.max(getHeight(), y + 1)) : null);
+            apply();
+        }
+
+        void sheet(int y, boolean dimmed) {
+            if (y == bottom && dimmed == dim) return;
+            bottom = y;
+            dim = dimmed;
+            apply();
+        }
+
+        private void apply() {
+            setVisibility(top < 0 ? View.INVISIBLE : View.VISIBLE);
+            setAlpha(dim ? .55f : 1f);
+            if (top <= 0 && bottom <= 0) {
+                setClipBounds(null);
+            } else {
+                int t = Math.max(top, 0), b = bottom > 0 ? bottom : Math.max(getHeight(), t + 1);
+                setClipBounds(new Rect(0, t, Math.max(getWidth(), 1), Math.max(b, t + 1)));
+            }
         }
 
         @Override
         public boolean dispatchTouchEvent(MotionEvent ev) {
-            if (top != 0 && ev.getActionMasked() == MotionEvent.ACTION_DOWN && (top < 0 || ev.getY() < top)) return false;
+            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN
+                    && (dim || top < 0 || (top > 0 && ev.getY() < top) || (bottom > 0 && ev.getY() >= bottom))) {
+                return false;
+            }
             return super.dispatchTouchEvent(ev);
         }
     }
