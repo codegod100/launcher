@@ -65,11 +65,19 @@ Rectangle {
         width: visible ? 44 : 0
         visible: input.displayText.length > 0
         z: 1
-        Text {
-            anchors.centerIn: parent
-            text: "✕"
-            color: Qt.rgba(1, 1, 1, .7)
-            font.pixelSize: 14
+        // Drawn, not a glyph: phone fonts may have no ✕.
+        Repeater {
+            model: [45, -45]
+            Rectangle {
+                required property var modelData
+                anchors.centerIn: parent
+                width: 14
+                height: 2
+                radius: 1
+                rotation: modelData
+                antialiasing: true
+                color: Qt.rgba(1, 1, 1, .7)
+            }
         }
         MouseArea {
             anchors.fill: parent

@@ -251,6 +251,8 @@ int main(int argc, char *argv[]) {
     eq(js("drawer.shown.map(i => apps[i].label).join(',')"), "Gmail,Maps", "the search filters the list");
     {
         // the clear button empties the search and shows every app again
+        settle(100);
+        snap("search");
         auto *clear = win->findChild<QQuickItem *>("searchClear");
         check(clear && clear->isVisible(), "the search shows a clear button");
         if (clear) tap(clear->mapToScene(QPointF(clear->width() / 2, clear->height() / 2)));

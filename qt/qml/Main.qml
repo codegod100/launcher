@@ -418,6 +418,9 @@ Window {
 
         Item {
             id: scroller
+            // The home screen fades out as the drawer slides over it, so only the
+            // wallpaper is left behind the app list.
+            opacity: drawer.visible ? Math.max(0, 1 - drawer.edge / Math.max(1, root.height)) : 1
             width: parent.width
             height: root.contentH
             y: -root.scrollY
