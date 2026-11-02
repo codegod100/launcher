@@ -62,4 +62,6 @@ if(NOT ANDROID AND TARGET Qt6::Test)
     target_link_libraries(ultrahome_e2e PRIVATE launcher_uiplugin launcher_ui Qt6::Quick Qt6::Test)
 endif()
 
-install(TARGETS ultrahome BUNDLE DESTINATION . RUNTIME DESTINATION bin)
+if(NOT ANDROID)
+    install(TARGETS ultrahome BUNDLE DESTINATION . RUNTIME DESTINATION bin)
+endif()
