@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const src = readFileSync(new URL("../qml/Layout.js", import.meta.url), "utf8").replace(".pragma library", "");
-const L = new Function(src + "; return {widgetRows, slotW, slotH, pack, box, cellAt, pin, clearCells, move, fit, widgetCols};")();
+const L = new Function(src + "; return {widgetRows, slotW, slotH, pack, box, cellAt, pin, clearCells, move, fit, widgetCols, legacy};")();
 
 const app = (x = -1, y = -1) => ({ kind: "app", str: "a", x, y });
 const widget = (w, rows, x = -1, y = -1) => ({ kind: "widget", str: "W", wid: 1, w, rows, x, y });
@@ -61,3 +61,16 @@ assert.equal(L.widgetCols(400, 70, 5), 0);
 assert.deepEqual(L.box({ col: 1, row: 2, w: 2, h: 1 }, 70), { x: 78, y: 144, w: 148, h: 64 });
 assert.deepEqual(L.cellAt(80, 150, 70), [1, 2]);
 console.log("layout ok");
+
+// The WebView build's saved home converts: apps by component, widgets with px heights to rows.
+assert.deepEqual(L.legacy({
+  "ultra.home.n": "3",
+  "ultra.home.kind.0": "0", "ultra.home.str.0": "com.a/.Main", "ultra.home.cx.0": "-1", "ultra.home.cy.0": "-1",
+  "ultra.home.kind.1": "1", "ultra.home.str.1": "Clock", "ultra.home.wid.1": "12", "ultra.home.h.1": "136",
+  "ultra.home.w.1": "3", "ultra.home.cx.1": "1", "ultra.home.cy.1": "2",
+  "ultra.home.kind.2": "0",
+}), [
+  { kind: "app", str: "com.a/.Main", x: -1, y: -1 },
+  { kind: "widget", str: "Clock", wid: 12, w: 3, rows: 2, x: 1, y: 2 },
+]);
+assert.deepEqual(L.legacy({}), []);

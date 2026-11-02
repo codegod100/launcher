@@ -346,6 +346,16 @@ int main(int argc, char *argv[]) {
     js("loadHome()");
     eq(homeLabels(), "Gmail,Chrome,Phone", "the layout is saved");
 
+    // The WebView build's saved home merges in: new slots go after, unpinned.
+    emit backend.legacyHome(QStringLiteral(
+        "{\"ultra.home.n\":\"3\",\"ultra.home.str.0\":\"com.example.clock/.MainActivity\","
+        "\"ultra.home.cx.0\":\"4\",\"ultra.home.cy.0\":\"4\",\"ultra.home.str.1\":\"com.example.chrome/.MainActivity\","
+        "\"ultra.home.kind.2\":\"1\",\"ultra.home.str.2\":\"Weather\",\"ultra.home.wid.2\":\"7\",\"ultra.home.h.2\":\"200\"}"));
+    settle(50);
+    eq(homeLabels(), "Gmail,Chrome,Phone,Clock,[Weather]", "the old home is brought over");
+    eq(js("home[3].x"), -1, "unpinned when merged");
+    eq(js("home[4].rows"), 3, "widget px become rows");
+
     // back closes things in order; home closes everything
     swipe(QPointF(206, 400), QPointF(206, 600));
     js("back()");

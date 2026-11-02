@@ -137,3 +137,25 @@ function widgetCols(px, colW, cols) {
     var k = Math.max(1, Math.ceil((px + CGAP - 8) / (colW + CGAP)));
     return k >= cols ? 0 : k;
 }
+
+// The WebView build's saved home (its ultra.home.* localStorage keys) as Qt slots.
+// Widget heights were px; they become whole rows.
+function legacy(kv) {
+    var out = [];
+    var n = parseInt(kv["ultra.home.n"], 10) || 0;
+    var num = function (k, i, d) {
+        var v = parseInt(kv["ultra.home." + k + "." + i], 10);
+        return isNaN(v) ? d : v;
+    };
+    for (var i = 0; i < n; i++) {
+        var str = kv["ultra.home.str." + i];
+        if (typeof str !== "string" || !str) continue;
+        var x = num("cx", i, -1), y = num("cy", i, -1);
+        if (num("kind", i, 0) === 1)
+            out.push({kind: "widget", str: str, wid: num("wid", i, 0), w: Math.max(0, num("w", i, 0)),
+                      rows: widgetRows(num("h", i, 120)), x: x, y: y});
+        else
+            out.push({kind: "app", str: str, x: x, y: y});
+    }
+    return out;
+}

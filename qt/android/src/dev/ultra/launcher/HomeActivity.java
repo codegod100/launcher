@@ -68,7 +68,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HomeActivity extends QtActivity {
     /** The GitHub release the updater installs from. */
     static final String RELEASE = "launcher-qt-latest";
-    static final int HOST_ID = 0x0172;
+    // The WebView build's host id: its widgets are bound to it, so they carry over.
+    static final int HOST_ID = 0x0171;
     static final int REQ_BIND = 1, REQ_CONFIGURE = 2;
 
     private static volatile HomeActivity self;
@@ -141,8 +142,59 @@ public class HomeActivity extends QtActivity {
             }
             qtReady = true;
             Native.insets(a.insetTop, a.insetBottom);
+            a.readLegacyHome();
         });
     }
+
+    /**
+     * The WebView build kept its home screen in its page's localStorage, which lives on in
+     * this app's data dir. Read it once, through a throwaway WebView on the same origin,
+     * and hand the ultra.home.* keys to QML, which merges them into the Qt home.
+     */
+    private void readLegacyHome() {
+        final android.content.SharedPreferences prefs = getSharedPreferences("qt", MODE_PRIVATE);
+        if (prefs.getBoolean("legacyRead", false)) return;
+        final android.webkit.WebView w;
+        try {
+            w = new android.webkit.WebView(this);
+        } catch (RuntimeException e) {
+            Log.w("ultra", "no WebView to read the old home from", e);
+            return;
+        }
+        w.getSettings().setJavaScriptEnabled(true);
+        w.getSettings().setDomStorageEnabled(true);
+        final boolean[] done = {false};
+        w.setWebViewClient(new android.webkit.WebViewClient() {
+            @Override
+            public android.webkit.WebResourceResponse shouldInterceptRequest(
+                    android.webkit.WebView v, android.webkit.WebResourceRequest r) {
+                return new android.webkit.WebResourceResponse("text/html", "utf-8",
+                        new java.io.ByteArrayInputStream("<!doctype html><title>.</title>".getBytes()));
+            }
+
+            @Override
+            public void onPageFinished(android.webkit.WebView v, String url) {
+                if (done[0]) return;
+                done[0] = true;
+                v.evaluateJavascript(LEGACY_JS, value -> {
+                    String json = null;
+                    try {
+                        json = new JSONArray("[" + value + "]").optString(0, null);
+                    } catch (JSONException e) {
+                        Log.w("ultra", "old home unreadable: " + value);
+                    }
+                    prefs.edit().putBoolean("legacyRead", true).apply();
+                    if (json != null && json.startsWith("{")) Native.legacyHome(json);
+                    v.destroy();
+                });
+            }
+        });
+        w.loadUrl("https://appassets.androidplatform.net/index.html");
+    }
+
+    private static final String LEGACY_JS =
+            "(function(){var o={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);"
+            + "if(k.indexOf('ultra.home.')===0)o[k]=localStorage.getItem(k);}return JSON.stringify(o);})()";
 
     private void onInsets(WindowInsets insets) {
         if (Build.VERSION.SDK_INT >= 30) {

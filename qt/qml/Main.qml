@@ -91,6 +91,26 @@ Window {
         home = out;
     }
 
+    // Bring over the WebView build's home screen (once, on Android). An empty Qt home
+    // takes it as it was; otherwise whatever isn't here yet goes after it, unpinned.
+    function importLegacy(json) {
+        let kv;
+        try { kv = JSON.parse(json); } catch (e) { return; }
+        const old = L.legacy(kv || {});
+        if (old.length === 0) return;
+        const has = {};
+        for (const s of home) has[s.kind === "widget" ? "w" + s.wid : "a" + s.str] = true;
+        const fresh = home.length === 0;
+        for (const s of old) {
+            if (home.length >= homeCap) break;
+            if (has[s.kind === "widget" ? "w" + s.wid : "a" + s.str]) continue;
+            if (!fresh) { s.x = -1; s.y = -1; }
+            home.push(s);
+        }
+        commit();
+        say("Brought over your home screen");
+    }
+
     function loadApps() {
         const list = Host.apps();
         const rows = {};
@@ -391,6 +411,7 @@ Window {
         }
         function onWidgetDrop(moved) { root.drop(moved) }
         function onToast(text) { root.say(text) }
+        function onLegacyHome(json) { root.importLegacy(json) }
     }
 
     Component.onCompleted: {

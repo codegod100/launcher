@@ -17,4 +17,5 @@ final class Native {
     static native void widgetGrab(int id);
     static native void widgetDrag(int x, int y);
     static native void widgetDrop(boolean moved);
+    static native void legacyHome(String json);  // the WebView build's ultra.home.* keys
 }

@@ -73,6 +73,7 @@ signals:
     void widgetGrab(int id);
     void widgetDrag(qreal x, qreal y);  // global logical px
     void widgetDrop(bool moved);
+    void legacyHome(const QString &json); // the WebView build's saved home, read once
     void toast(const QString &text);    // desktop stand-in for an action
 
 private:

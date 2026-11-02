@@ -55,6 +55,13 @@ void jWidgetDrag(JNIEnv *, jclass, jint x, jint y) {
 }
 void jWidgetDrop(JNIEnv *, jclass, jboolean moved) { post([=] { emit g_backend->widgetDrop(moved); }); }
 
+void jLegacyHome(JNIEnv *env, jclass, jstring json) {
+    const char *c = env->GetStringUTFChars(json, nullptr);
+    const QString s = QString::fromUtf8(c);
+    env->ReleaseStringUTFChars(json, c);
+    post([=] { emit g_backend->legacyHome(s); });
+}
+
 void registerNatives() {
     static bool done = false;
     if (done) return;
@@ -69,6 +76,7 @@ void registerNatives() {
         {"widgetGrab", "(I)V", reinterpret_cast<void *>(jWidgetGrab)},
         {"widgetDrag", "(II)V", reinterpret_cast<void *>(jWidgetDrag)},
         {"widgetDrop", "(Z)V", reinterpret_cast<void *>(jWidgetDrop)},
+        {"legacyHome", "(Ljava/lang/String;)V", reinterpret_cast<void *>(jLegacyHome)},
     };
     QJniEnvironment env;
     env.registerNativeMethods("dev/ultra/launcher/Native", methods, int(std::size(methods)));
