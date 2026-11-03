@@ -90,11 +90,11 @@ public class HomeActivity extends QtActivity {
     private final int[] layerAt = new int[2];
 
     private final LauncherApps.Callback packages = new LauncherApps.Callback() {
-        @Override public void onPackageRemoved(String pkg, UserHandle u) { appsChanged(); }
-        @Override public void onPackageAdded(String pkg, UserHandle u) { appsChanged(); }
-        @Override public void onPackageChanged(String pkg, UserHandle u) { appsChanged(); }
-        @Override public void onPackagesAvailable(String[] pkgs, UserHandle u, boolean replacing) { appsChanged(); }
-        @Override public void onPackagesUnavailable(String[] pkgs, UserHandle u, boolean replacing) { appsChanged(); }
+        @Override public void onPackageRemoved(String pkg, UserHandle u) { appsChanged(pkg); }
+        @Override public void onPackageAdded(String pkg, UserHandle u) { appsChanged(pkg); }
+        @Override public void onPackageChanged(String pkg, UserHandle u) { appsChanged(pkg); }
+        @Override public void onPackagesAvailable(String[] pkgs, UserHandle u, boolean replacing) { appsChanged(String.join(",", pkgs)); }
+        @Override public void onPackagesUnavailable(String[] pkgs, UserHandle u, boolean replacing) { appsChanged(String.join(",", pkgs)); }
     };
 
     @Override
@@ -252,8 +252,9 @@ public class HomeActivity extends QtActivity {
         if (qtReady) Native.backPressed();
     }
 
-    private void appsChanged() {
-        if (qtReady) Native.appsChanged();
+    /** packages: the ones that changed, comma-separated, so only their icons are redrawn. */
+    private void appsChanged(String packages) {
+        if (qtReady) Native.appsChanged(packages == null ? "" : packages);
     }
 
     // ------------------------------------------------------------ called from Qt

@@ -346,6 +346,19 @@ int main(int argc, char *argv[]) {
     js("loadHome()");
     eq(homeLabels(), "Gmail,Chrome,Phone", "the layout is saved");
 
+    // Starting again: the saved app list names the home tiles before the real list loads,
+    // and nothing is hidden meanwhile.
+    js("apps = []; appRow = ({}); loading = true; setApps(Host.savedApps())");
+    eq(homeLabels(), "Gmail,Chrome,Phone", "home tiles come from the saved app list");
+    js("apps = []; appRow = ({})");
+    eq(js("hidden.some(h => h)"), false, "nothing is hidden before the list loads");
+    js("loadApps()");
+    // A changed package reloads only its own icons.
+    emit backend.appsChanged(QStringLiteral("com.example.chrome"));
+    settle(50);
+    eq(js("gen('com.example.chrome/.MainActivity') + ',' + gen('com.example.gmail/.MainActivity')"), "1,0",
+       "a changed app's icons reload, the rest stay");
+
     // The WebView build's saved home merges in: new slots go after, unpinned.
     emit backend.legacyHome(QStringLiteral(
         "{\"ultra.home.n\":\"3\",\"ultra.home.str.0\":\"com.example.clock/.MainActivity\","

@@ -10,7 +10,7 @@ Item {
     property var apps: []          // [{label, component, system}]
     property var homeSet: ({})     // component -> true: on the home screen
     property bool loading: true
-    property int generation: 0
+    property var iconGen: ({})     // package -> n, see Main.gen
     property real insetTop: 0
     property real insetBottom: 0
     property alias query: search.text
@@ -117,7 +117,7 @@ Item {
                 height: 84
                 key: "a:" + (cell.app.component || "")
                 label: cell.app.label || ""
-                generation: root.generation
+                generation: root.iconGen[(cell.app.component || "").split("/")[0]] || 0
                 iconSize: 52
                 fontSize: 12
                 spacing: 6

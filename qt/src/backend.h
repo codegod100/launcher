@@ -28,6 +28,7 @@ public:
 
     // Lists: [{label, component, system}] and [{label, app, provider, h}].
     Q_INVOKABLE QVariantList apps() const;
+    Q_INVOKABLE QVariantList savedApps() const; // the last list apps() returned, for a quick start
     Q_INVOKABLE QVariantList widgetProviders() const;
 
     Q_INVOKABLE void launch(const QString &component);
@@ -65,7 +66,7 @@ public:
 
 signals:
     void insetsChanged();
-    void appsChanged();
+    void appsChanged(const QString &packages); // comma-separated; empty: any
     void homePressed();
     void backPressed();
     void widgetAdded(int id);

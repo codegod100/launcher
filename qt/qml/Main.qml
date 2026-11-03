@@ -28,7 +28,8 @@ Window {
     property var apps: []            // [{label, component, system}], by label
     property var appRow: ({})        // component -> row in apps
     property bool loading: true
-    property int generation: 0       // bumped when the app list changes
+    property var iconGen: ({})       // package -> n, bumped when it changes, so its icons reload
+    function gen(component) { return iconGen[(component || "").split("/")[0]] || 0 }
     property var home: []            // slots, see Layout.js
     property bool drawerOpen: false
     property bool picking: false     // the drawer adds apps to home / takes them off
@@ -60,7 +61,9 @@ Window {
     readonly property real gridBottom: height - (insetBottom + 24)
     readonly property int nrows: home.length > 0
         ? Math.max(1, Math.floor((gridBottom - gridTop + L.RGAP) / (L.CELL + L.RGAP))) : 0
-    readonly property var hidden: home.map(s => s.kind === "app" && appRow[s.str] === undefined)
+    // An app not in the list is gone (uninstalled, or on an unmounted card); until the
+    // list has loaded, nothing is.
+    readonly property var hidden: home.map(s => s.kind === "app" && !loading && appRow[s.str] === undefined)
     readonly property var packed: L.pack(home, cols, nrows, hidden)
     readonly property real gridH: Math.max(0, packed.rows * (L.CELL + L.RGAP) - L.RGAP)
     readonly property real contentH: gridTop + gridH + insetBottom + 24
@@ -111,18 +114,19 @@ Window {
         say("Brought over your home screen");
     }
 
-    function loadApps() {
-        const list = Host.apps();
+    function loadApps() { setApps(Host.apps()); loading = false; dropGone(); }
+
+    function setApps(list) {
         const rows = {};
         for (let i = 0; i < list.length; i++) rows[list[i].component] = i;
         apps = list;
         appRow = rows;
-        loading = false;
-        dropGone();
     }
 
-    function reload() {
-        generation++;
+    function reload(packages) {
+        const g = Object.assign({}, iconGen);
+        for (const p of (packages || "").split(",")) if (p) g[p] = (g[p] || 0) + 1;
+        iconGen = g;
         loadApps();
         if (sheet === "app") { sheet = ""; appSheetRow = -1; }
     }
@@ -395,7 +399,7 @@ Window {
     // ---- Host
     Connections {
         target: Host
-        function onAppsChanged() { root.reload() }
+        function onAppsChanged(packages) { root.reload(packages) }
         function onHomePressed() { root.goHome() }
         function onBackPressed() { root.back() }
         function onWidgetAdded(id) { root.widgetAdded(id) }
@@ -416,6 +420,7 @@ Window {
 
     Component.onCompleted: {
         loadHome();
+        setApps(Host.savedApps()); // icons and names show at once; the real list follows
         Host.ready();
         Qt.callLater(loadApps);
     }
@@ -555,8 +560,8 @@ Window {
                             visible: !slot.isWidget
                             anchors.fill: parent
                             key: "a:" + (slot.s.str || "")
-                            label: slot.row >= 0 ? root.apps[slot.row].label : ""
-                            generation: root.generation
+                            label: (root.apps[slot.row] || {}).label || ""
+                            generation: root.gen(slot.s.str)
                             iconSize: 40
                             fontSize: 11
                             spacing: 4
@@ -777,7 +782,7 @@ Window {
             apps: root.apps
             homeSet: root.homeSet
             loading: root.loading
-            generation: root.generation
+            iconGen: root.iconGen
             insetTop: root.insetTop
             insetBottom: root.insetBottom
             onEdgeChanged: root.cover()
@@ -908,7 +913,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         size: 40
                         key: "w:" + wrow.p.provider
-                        generation: root.generation
+                        generation: root.gen(wrow.p.provider)
                     }
                     Column {
                         x: 60

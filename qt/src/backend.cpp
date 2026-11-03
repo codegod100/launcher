@@ -40,7 +40,12 @@ void post(F f) {
     if (g_backend) QMetaObject::invokeMethod(g_backend, f, Qt::QueuedConnection);
 }
 
-void jAppsChanged(JNIEnv *, jclass) { post([] { emit g_backend->appsChanged(); }); }
+void jAppsChanged(JNIEnv *env, jclass, jstring packages) {
+    const char *c = env->GetStringUTFChars(packages, nullptr);
+    const QString s = QString::fromUtf8(c);
+    env->ReleaseStringUTFChars(packages, c);
+    post([=] { emit g_backend->appsChanged(s); });
+}
 void jHomePressed(JNIEnv *, jclass) { post([] { emit g_backend->homePressed(); }); }
 void jBackPressed(JNIEnv *, jclass) { post([] { emit g_backend->backPressed(); }); }
 void jInsets(JNIEnv *, jclass, jint top, jint bottom) { post([=] { g_backend->setInsets(top, bottom); }); }
@@ -67,7 +72,7 @@ void registerNatives() {
     if (done) return;
     done = true;
     const JNINativeMethod methods[] = {
-        {"appsChanged", "()V", reinterpret_cast<void *>(jAppsChanged)},
+        {"appsChanged", "(Ljava/lang/String;)V", reinterpret_cast<void *>(jAppsChanged)},
         {"homePressed", "()V", reinterpret_cast<void *>(jHomePressed)},
         {"backPressed", "()V", reinterpret_cast<void *>(jBackPressed)},
         {"insets", "(II)V", reinterpret_cast<void *>(jInsets)},
@@ -120,12 +125,7 @@ void Backend::ready() {
 #endif
 }
 
-QVariantList Backend::apps() const {
-#ifdef Q_OS_ANDROID
-    const QJsonDocument doc = QJsonDocument::fromJson(callString("apps").toUtf8());
-#else
-    const QJsonDocument doc = demo(QStringLiteral("apps.json"));
-#endif
+static QVariantList appList(const QJsonDocument &doc) {
     QVariantList out;
     for (const QJsonValue &v : doc.object().value(QStringLiteral("apps")).toArray()) {
         const QJsonObject o = v.toObject();
@@ -134,6 +134,23 @@ QVariantList Backend::apps() const {
                                {"system", o.value("system").toBool()}});
     }
     return out;
+}
+
+// The app list, and a copy kept for the next start: listing (and labelling) every app
+// takes a while on a phone, so the home screen starts from the copy meanwhile.
+QVariantList Backend::apps() const {
+#ifdef Q_OS_ANDROID
+    const QByteArray json = callString("apps").toUtf8();
+#else
+    const QByteArray json = demo(QStringLiteral("apps.json")).toJson(QJsonDocument::Compact);
+#endif
+    const QVariantList out = appList(QJsonDocument::fromJson(json));
+    if (!out.isEmpty()) QSettings().setValue(QStringLiteral("apps"), QString::fromUtf8(json));
+    return out;
+}
+
+QVariantList Backend::savedApps() const {
+    return appList(QJsonDocument::fromJson(QSettings().value(QStringLiteral("apps")).toString().toUtf8()));
 }
 
 QVariantList Backend::widgetProviders() const {

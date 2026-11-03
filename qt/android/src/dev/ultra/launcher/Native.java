@@ -8,7 +8,7 @@ package dev.ultra.launcher;
 final class Native {
     private Native() {}
 
-    static native void appsChanged();
+    static native void appsChanged(String packages); // comma-separated
     static native void homePressed();
     static native void backPressed();
     static native void insets(int top, int bottom);
