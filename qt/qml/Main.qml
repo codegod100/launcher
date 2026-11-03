@@ -114,7 +114,8 @@ Window {
         say("Brought over your home screen");
     }
 
-    function loadApps() { setApps(Host.apps()); loading = false; dropGone(); }
+    function loadApps() { gotApps(Host.apps()) }
+    function gotApps(list) { setApps(list); loading = false; dropGone(); }
 
     function setApps(list) {
         const rows = {};
@@ -127,7 +128,7 @@ Window {
         const g = Object.assign({}, iconGen);
         for (const p of (packages || "").split(",")) if (p) g[p] = (g[p] || 0) + 1;
         iconGen = g;
-        loadApps();
+        Host.requestApps();
         if (sheet === "app") { sheet = ""; appSheetRow = -1; }
     }
 
@@ -400,6 +401,7 @@ Window {
     Connections {
         target: Host
         function onAppsChanged(packages) { root.reload(packages) }
+        function onAppsLoaded(list) { root.gotApps(list) }
         function onHomePressed() { root.goHome() }
         function onBackPressed() { root.back() }
         function onWidgetAdded(id) { root.widgetAdded(id) }
@@ -418,11 +420,15 @@ Window {
         function onLegacyHome(json) { root.importLegacy(json) }
     }
 
+    // The drawer's icons load once home's have had a head start (or when it opens).
+    Timer { id: drawerWarm; interval: 1500 }
+
     Component.onCompleted: {
         loadHome();
         setApps(Host.savedApps()); // icons and names show at once; the real list follows
         Host.ready();
-        Qt.callLater(loadApps);
+        Host.requestApps();
+        drawerWarm.start();
     }
 
     // ---- view
@@ -783,6 +789,7 @@ Window {
             homeSet: root.homeSet
             loading: root.loading
             iconGen: root.iconGen
+            warm: !drawerWarm.running
             insetTop: root.insetTop
             insetBottom: root.insetBottom
             onEdgeChanged: root.cover()

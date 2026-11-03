@@ -28,6 +28,7 @@ public:
 
     // Lists: [{label, component, system}] and [{label, app, provider, h}].
     Q_INVOKABLE QVariantList apps() const;
+    Q_INVOKABLE void requestApps();             // answers with appsLoaded
     Q_INVOKABLE QVariantList savedApps() const; // the last list apps() returned, for a quick start
     Q_INVOKABLE QVariantList widgetProviders() const;
 
@@ -66,6 +67,7 @@ public:
 
 signals:
     void insetsChanged();
+    void appsLoaded(const QVariantList &apps);
     void appsChanged(const QString &packages); // comma-separated; empty: any
     void homePressed();
     void backPressed();
@@ -76,6 +78,9 @@ signals:
     void widgetDrop(bool moved);
     void legacyHome(const QString &json); // the WebView build's saved home, read once
     void toast(const QString &text);    // desktop stand-in for an action
+
+public:
+    void takeAppList(const QByteArray &json); // HomeActivity's answer to requestApps
 
 private:
     qreal dpr() const;

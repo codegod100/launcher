@@ -47,6 +47,13 @@ import org.json.JSONObject;
 import org.qtproject.qt.android.bindings.QtActivity;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.security.MessageDigest;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -260,6 +267,13 @@ public class HomeActivity extends QtActivity {
     // ------------------------------------------------------------ called from Qt
 
     /** {"apps": [{"label", "component", "system"}]}, every launchable activity, by label. */
+    private static final ExecutorService lister = Executors.newSingleThreadExecutor();
+
+    /** apps(), worked out off Qt's thread (it takes a while), then handed to Native.appList. */
+    static void listApps() {
+        lister.execute(() -> Native.appList(apps()));
+    }
+
     static String apps() {
         HomeActivity a = self;
         if (a == null) return "{\"apps\":[]}";
@@ -326,18 +340,59 @@ public class HomeActivity extends QtActivity {
     // Some icon drawables don't survive being loaded and drawn concurrently.
     private static final Object iconLock = new Object();
 
-    /** An icon as a PNG, size px square: key "a:COMPONENT" (an app) or "w:PROVIDER" (a widget). */
+    /**
+     * An icon as premultiplied RGBA pixels, size px square: key "a:COMPONENT" (an app) or
+     * "w:PROVIDER" (a widget). Drawn icons are kept on disk, keyed by the app's last update,
+     * so a fresh start reads them back instead of drawing every one again.
+     */
     static byte[] icon(String key, int size) {
         HomeActivity a = self;
         if (a == null || key == null || key.length() < 3) return null;
+        size = Math.max(16, Math.min(size, 512));
+        File f = a.iconFile(key, size);
+        if (f != null && f.length() == (long) size * size * 4) {
+            try {
+                return Files.readAllBytes(f.toPath());
+            } catch (java.io.IOException e) {
+                f.delete();
+            }
+        }
+        byte[] px;
         synchronized (iconLock) {
             try {
                 Drawable d = key.startsWith("w:") ? a.widgetIcon(key.substring(2)) : a.appIcon(key.substring(2));
-                return d == null ? null : toPng(d, Math.max(16, Math.min(size, 512)));
+                px = d == null ? null : toPixels(d, size);
             } catch (RuntimeException | OutOfMemoryError e) {
                 Log.w("ultra", "icon for " + key, e);
                 return null;
             }
+        }
+        if (px != null && f != null) {
+            File tmp = new File(f.getPath() + ".tmp");
+            try (FileOutputStream out = new FileOutputStream(tmp)) {
+                out.write(px);
+            } catch (java.io.IOException e) {
+                tmp.delete();
+                tmp = null;
+            }
+            if (tmp != null && !tmp.renameTo(f)) tmp.delete();
+        }
+        return px;
+    }
+
+    private File iconFile(String key, int size) {
+        try {
+            String pkg = key.substring(2).split("/", 2)[0];
+            long stamp = getPackageManager().getPackageInfo(pkg, 0).lastUpdateTime;
+            String id = key + "|" + size + "|" + stamp + "|" + getResources().getDisplayMetrics().densityDpi;
+            byte[] h = MessageDigest.getInstance("SHA-1").digest(id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder name = new StringBuilder();
+            for (byte b : h) name.append(String.format("%02x", b));
+            File dir = new File(getCacheDir(), "icons");
+            if (!dir.isDirectory() && !dir.mkdirs()) return null;
+            return new File(dir, name.toString());
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -373,15 +428,17 @@ public class HomeActivity extends QtActivity {
         return d;
     }
 
-    private static byte[] toPng(Drawable d, int size) {
+    // ARGB_8888 bitmaps hold premultiplied RGBA bytes: Qt takes them as they are, with no
+    // PNG to encode here and decode there.
+    private static byte[] toPixels(Drawable d, int size) {
         d = d.mutate(); // setBounds on a drawable shared with other callers would move theirs
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         d.setBounds(0, 0, size, size);
         d.draw(new Canvas(bmp));
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        ByteBuffer buf = ByteBuffer.allocate(size * size * 4);
+        bmp.copyPixelsToBuffer(buf);
         bmp.recycle();
-        return out.toByteArray();
+        return buf.array();
     }
 
     private AppWidgetProviderInfo provider(String p) {

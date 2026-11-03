@@ -4,6 +4,8 @@
 #include <QPainter>
 #include <QUrl>
 
+#include <cmath>
+
 #ifdef Q_OS_ANDROID
 #include <QJniEnvironment>
 #include <QJniObject>
@@ -17,16 +19,19 @@ QImage IconProvider::requestImage(const QString &id, QSize *size, const QSize &r
     const int px = requested.width() > 0 ? requested.width() : 144;
     QImage img;
 #ifdef Q_OS_ANDROID
-    QJniObject png = QJniObject::callStaticObjectMethod(
+    // Premultiplied RGBA, side x side, straight from an Android bitmap.
+    QJniObject pixels = QJniObject::callStaticObjectMethod(
         "dev/ultra/launcher/HomeActivity", "icon", "(Ljava/lang/String;I)[B",
         QJniObject::fromString(key).object<jstring>(), jint(px));
-    if (png.isValid()) {
+    if (pixels.isValid()) {
         QJniEnvironment env;
-        auto arr = png.object<jbyteArray>();
+        auto arr = pixels.object<jbyteArray>();
         const jsize n = env->GetArrayLength(arr);
-        QByteArray bytes(n, Qt::Uninitialized);
-        env->GetByteArrayRegion(arr, 0, n, reinterpret_cast<jbyte *>(bytes.data()));
-        img.loadFromData(bytes, "PNG");
+        const int side = int(std::lround(std::sqrt(n / 4.0)));
+        if (side > 0 && jsize(side) * side * 4 == n) {
+            img = QImage(side, side, QImage::Format_RGBA8888_Premultiplied);
+            env->GetByteArrayRegion(arr, 0, n, reinterpret_cast<jbyte *>(img.bits()));
+        }
     }
 #else
     // A disc in a colour picked from the key, with the name's first letter.

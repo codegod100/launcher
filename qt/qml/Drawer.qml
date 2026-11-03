@@ -10,6 +10,7 @@ Item {
     property var apps: []          // [{label, component, system}]
     property var homeSet: ({})     // component -> true: on the home screen
     property bool loading: true
+    property bool warm: true       // false: hold off making icons until it opens
     property var iconGen: ({})     // package -> n, see Main.gen
     property real insetTop: 0
     property real insetBottom: 0
@@ -102,7 +103,7 @@ Item {
         clip: true
         bottomMargin: root.insetBottom + 24
         boundsBehavior: Flickable.DragOverBounds
-        model: root.shown
+        model: root.warm || root.visible ? root.shown : []
         // Swiping up once the list is at its end puts the drawer away.
         onDragEnded: if (verticalOvershoot > 48) root.closeRequested()
         delegate: Item {

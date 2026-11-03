@@ -67,6 +67,13 @@ void jLegacyHome(JNIEnv *env, jclass, jstring json) {
     post([=] { emit g_backend->legacyHome(s); });
 }
 
+void jAppList(JNIEnv *env, jclass, jstring json) {
+    const char *c = env->GetStringUTFChars(json, nullptr);
+    const QByteArray s(c);
+    env->ReleaseStringUTFChars(json, c);
+    post([=] { g_backend->takeAppList(s); });
+}
+
 void registerNatives() {
     static bool done = false;
     if (done) return;
@@ -81,6 +88,7 @@ void registerNatives() {
         {"widgetGrab", "(I)V", reinterpret_cast<void *>(jWidgetGrab)},
         {"widgetDrag", "(II)V", reinterpret_cast<void *>(jWidgetDrag)},
         {"widgetDrop", "(Z)V", reinterpret_cast<void *>(jWidgetDrop)},
+        {"appList", "(Ljava/lang/String;)V", reinterpret_cast<void *>(jAppList)},
         {"legacyHome", "(Ljava/lang/String;)V", reinterpret_cast<void *>(jLegacyHome)},
     };
     QJniEnvironment env;
@@ -147,6 +155,21 @@ QVariantList Backend::apps() const {
     const QVariantList out = appList(QJsonDocument::fromJson(json));
     if (!out.isEmpty()) QSettings().setValue(QStringLiteral("apps"), QString::fromUtf8(json));
     return out;
+}
+
+// apps(), without holding up the UI thread meanwhile: the list arrives as appsLoaded.
+void Backend::requestApps() {
+#ifdef Q_OS_ANDROID
+    callVoid("listApps");
+#else
+    QTimer::singleShot(0, this, [this] { takeAppList(demo(QStringLiteral("apps.json")).toJson(QJsonDocument::Compact)); });
+#endif
+}
+
+void Backend::takeAppList(const QByteArray &json) {
+    const QVariantList out = appList(QJsonDocument::fromJson(json));
+    if (!out.isEmpty()) QSettings().setValue(QStringLiteral("apps"), QString::fromUtf8(json));
+    emit appsLoaded(out);
 }
 
 QVariantList Backend::savedApps() const {
