@@ -3,6 +3,11 @@
 #include <QColor>
 #include <QPainter>
 #include <QUrl>
+#include <QElapsedTimer>
+#include <QLoggingCategory>
+#include <QThread>
+
+Q_LOGGING_CATEGORY(lcIcon, "ultra.icon")
 
 #include <cmath>
 
@@ -17,6 +22,8 @@ QImage IconProvider::requestImage(const QString &id, QSize *size, const QSize &r
     if (q >= 0) key.truncate(q);
     key = QUrl::fromPercentEncoding(key.toUtf8());
     const int px = requested.width() > 0 ? requested.width() : 144;
+    QElapsedTimer took;
+    took.start();
     QImage img;
 #ifdef Q_OS_ANDROID
     // Premultiplied RGBA, side x side, straight from an Android bitmap.
@@ -54,5 +61,7 @@ QImage IconProvider::requestImage(const QString &id, QSize *size, const QSize &r
     p.drawText(QRectF(0, 0, px, px), Qt::AlignCenter, name.left(1).toUpper());
 #endif
     if (size) *size = img.size();
+    // Timing, to find what holds icons up on a phone: adb logcat -s ultrahome:*
+    qCInfo(lcIcon, "icon %s %dpx %lldms%s", qPrintable(key), px, took.elapsed(), img.isNull() ? " (none)" : "");
     return img;
 }

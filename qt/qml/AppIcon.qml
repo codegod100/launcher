@@ -25,6 +25,7 @@ Item {
         mipmap: true
         sourceSize.width: Math.ceil(root.size * Screen.devicePixelRatio)
         sourceSize.height: Math.ceil(root.size * Screen.devicePixelRatio)
+        onStatusChanged: if (status === Image.Ready || status === Image.Error) console.info("ultra.icon shown", root.key, status === Image.Ready)
         source: root.key ? "image://icon/" + encodeURIComponent(root.key) + "?" + root.generation : ""
     }
 }

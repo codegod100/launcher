@@ -219,6 +219,7 @@ public class HomeActivity extends QtActivity {
     @Override
     public void onStart() {
         super.onStart();
+        Log.i("ultra", "onStart");
         widgetHost.startListening();
         Updater.check(this, false);
     }
@@ -226,6 +227,7 @@ public class HomeActivity extends QtActivity {
     @Override
     public void onStop() {
         super.onStop();
+        Log.i("ultra", "onStop");
         widgetHost.stopListening();
     }
 
