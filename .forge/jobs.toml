@@ -1,12 +1,7 @@
 # fileapi forge CI (https://fileapi.fastapicloud.dev/forge/nandi.uk/launcher).
-# The forge follows GitHub's main (below), so a commit to either one builds the Qt APK on
-# Depot and publishes it as a release here, which the phone's updater reads
+# This repo is where the launcher is built and released: each push to main here builds the
+# Qt APK on Depot and publishes it as a release, which the phone's updater reads
 # (releases/latest/assets/version.json). Needs DEPOT_TOKEN and DEPOT_PROJECT_ID (user secrets).
-
-[upstream]
-url = "https://github.com/codegod100/launcher.git"
-branches = ["main"]
-interval = 60
 
 [[job]]
 name = "apk"
