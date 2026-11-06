@@ -12,7 +12,9 @@ VERSION_CODE=$(( $(date +%s) / 60 ))
 
 echo "== tools"
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends python3-pip python3-venv ninja-build cmake unzip curl ca-certificates >/dev/null
+# The host Qt tools (moc, qmlimportscanner, qmlcachegen) need glib, GL and friends.
+apt-get install -y -qq --no-install-recommends python3-pip python3-venv ninja-build cmake unzip curl ca-certificates \
+  libglib2.0-0t64 libgl1 libegl1 libopengl0 libfontconfig1 libfreetype6 libxkbcommon0 libdbus-1-3 >/dev/null
 python3 -m venv /opt/aqt && /opt/aqt/bin/pip install -q aqtinstall
 
 echo "== Qt $QT_VERSION (android arm64 + host)"
