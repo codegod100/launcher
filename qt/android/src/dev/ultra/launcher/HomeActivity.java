@@ -73,7 +73,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * live widget slots are (placeWidgets) and this class moves the views there.
  */
 public class HomeActivity extends QtActivity {
-    /** The GitHub release the updater installs from. */
     // The WebView build's host id: its widgets are bound to it, so they carry over.
     static final int HOST_ID = 0x0171;
     static final int REQ_BIND = 1, REQ_CONFIGURE = 2;
