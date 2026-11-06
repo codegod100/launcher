@@ -26,9 +26,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Updates the launcher from the rolling "launcher-latest" GitHub prerelease. CI uploads
+ * Updates the launcher from the newest release on V's fileapi forge (nandi.uk/launcher),
+ * which .forge/jobs.toml builds on every commit to main. Each release holds
  * version.json ({"versionCode": N, "commit": SHA}) next to ultra-launcher.apk, with N the
- * workflow run number, which is also the APK's versionCode. When N is newer than the installed
+ * APK's versionCode. When N is newer than the installed
  * build, the APK is streamed into a PackageInstaller session and committed. Android then asks
  * the user to confirm (or, on Android 12+ once this app installed itself, may not ask at all).
  *
@@ -36,7 +37,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * "Check for updates" checks now and reports what it found.
  */
 final class Updater {
-    static final String BASE = "https://github.com/codegod100/launcher/releases/download/" + HomeActivity.RELEASE + "/";
+    static final String BASE =
+            "https://fileapi.fastapicloud.dev/api/forge/repos/nandi.uk/launcher/releases/latest/assets/";
     static final long CHECK_EVERY = 6 * 60 * 60 * 1000L;
     static final String EXTRA_VERSION = "dev.ultra.launcher.VERSION";
 
