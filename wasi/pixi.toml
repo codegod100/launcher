@@ -1,0 +1,12 @@
+[workspace]
+name = "ultra-launcher-wasi"
+channels = ["https://prefix.dev/nandi-testing", "conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+qt2wasm = "*"
+cmake = "*"
+ninja = "*"
+
+[tasks]
+build = { cmd = "bash build.sh", description = "Build launcher.wasm (WASI component)" }

@@ -1,0 +1,23 @@
+package ultra:launcher@0.1.0;
+
+interface android {
+    /// JSON array of {"label": string, "component": string, "system"?: bool}.
+    apps: func() -> string;
+    /// Base64-encoded premultiplied RGBA8888 pixels (size * size * 4 bytes) for "a:COMPONENT".
+    icon: func(key: string, size: u32) -> option<string>;
+    launch: func(component: string);
+    app-info: func(component: string);
+    uninstall: func(component: string);
+    open-settings: func();
+    pick-wallpaper: func();
+    haptic: func();
+    /// System bar insets in physical screen pixels: (top, bottom).
+    insets: func() -> tuple<u32, u32>;
+    /// Drain queued host events ("home", "back", "insets", "apps-changed:<pkgs>").
+    poll-events: func() -> list<string>;
+}
+
+world gui {
+    include latha:gui/gui@0.2.3;
+    import android;
+}

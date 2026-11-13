@@ -9,3 +9,10 @@ branches = ["main"]
 timeout = 3600
 image = "eclipse-temurin:17-jdk-noble"
 run = "bash ci/forge-apk.sh"
+
+[[job]]
+name = "wasm-apk"
+branches = ["main"]
+timeout = 3600
+image = "eclipse-temurin:17-jdk-noble"
+run = "bash ci/forge-wasm-apk.sh"

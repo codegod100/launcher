@@ -1,0 +1,64 @@
+[package]
+name = "ultra-launcher-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+android-activity = { version = "0.6", features = ["native-activity"] }
+android_logger = "0.14"
+base64 = "0.22"
+jni = "0.21"
+log = "0.4"
+ndk = "0.9"
+sha2 = "0.10"
+wasmtime = { version = "50", default-features = false, features = ["component-model", "cranelift", "runtime", "std"] }
+wasmtime-wasi = "50"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 16
+strip = true
+
+[package.metadata.android]
+package = "dev.ultra.launcher.wasm"
+apk_name = "ultra-launcher-wasm"
+build_targets = ["aarch64-linux-android"]
+resources = "res"
+assets = "assets"
+
+[package.metadata.android.sdk]
+min_sdk_version = 30
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "ultra Wasm"
+icon = "@mipmap/ic_launcher"
+theme = "@style/HomeWasm"
+extract_native_libs = true
+has_code = true
+
+[package.metadata.android.application.activity]
+name = "dev.ultra.launcher.wasm.LauncherActivity"
+config_changes = "orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
+launch_mode = "singleTask"
+state_not_needed = true
+clear_task_on_launch = true
+exclude_from_recents = true
+orientation = "unspecified"
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.HOME", "android.intent.category.DEFAULT", "android.intent.category.LAUNCHER"]
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.REQUEST_DELETE_PACKAGES"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.QUERY_ALL_PACKAGES"
