@@ -510,6 +510,7 @@ fn android_main(app: AndroidApp) {
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
     wasi_builder.env("QT_QPA_PLATFORM", "qt2wasmgui");
+    wasi_builder.env("LATHA_GUI_TEXT_INPUT", "1");
     let _ = wasi_builder.preopened_dir(&data_dir, "/data", FsPerms::ReadWrite);
 
     let state = HostState {

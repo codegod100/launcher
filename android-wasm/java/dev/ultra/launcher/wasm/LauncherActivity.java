@@ -131,7 +131,8 @@ public class LauncherActivity extends NativeActivity {
         searchInput.setSingleLine(true);
         searchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
-        searchInput.setFocusableInTouchMode(true);
+        searchInput.setFocusable(false);
+        searchInput.setFocusableInTouchMode(false);
         searchInput.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
@@ -407,6 +408,7 @@ public class LauncherActivity extends NativeActivity {
             InputMethodManager imm = getSystemService(InputMethodManager.class);
             if (imm == null || searchInput == null) return;
             if (active) {
+                searchInput.setFocusable(true);
                 searchInput.setFocusableInTouchMode(true);
                 searchInput.requestFocus();
                 imm.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
@@ -416,6 +418,8 @@ public class LauncherActivity extends NativeActivity {
                 searchInput.setText("");
                 suppressSearchWatch = false;
                 searchInput.clearFocus();
+                searchInput.setFocusableInTouchMode(false);
+                searchInput.setFocusable(false);
             }
         });
     }
