@@ -311,6 +311,55 @@ void LauncherWindow::pollHostEvents() {
                 saveHome();
                 update();
             }
+        } else if (ev.startsWith(QLatin1String("widget-lift:"))) {
+            const QStringList parts = ev.mid(12).split(QLatin1Char(':'));
+            if (parts.size() >= 3) {
+                const int id = parts[0].toInt();
+                const qreal dpr = devicePixelRatio();
+                for (int i = 0; i < m_home.size(); ++i) {
+                    if (m_home[i].widgetId == id) {
+                        m_liftedHome = i;
+                        m_liftPos = QPointF(parts[1].toDouble() / dpr, parts[2].toDouble() / dpr);
+                        update();
+                        break;
+                    }
+                }
+            }
+        } else if (ev.startsWith(QLatin1String("widget-drag:"))) {
+            const QStringList parts = ev.mid(12).split(QLatin1Char(':'));
+            if (parts.size() >= 2 && m_liftedHome >= 0) {
+                const qreal dpr = devicePixelRatio();
+                m_liftPos = QPointF(parts[0].toDouble() / dpr, parts[1].toDouble() / dpr);
+                update();
+            }
+        } else if (ev.startsWith(QLatin1String("widget-drop:"))) {
+            const QStringList parts = ev.mid(12).split(QLatin1Char(':'));
+            if (parts.size() >= 5) {
+                const int id = parts[0].toInt();
+                const qreal dpr = devicePixelRatio();
+                const QPointF dropPos(parts[1].toDouble() / dpr, parts[2].toDouble() / dpr);
+                const QPointF downPos(parts[3].toDouble() / dpr, parts[4].toDouble() / dpr);
+                const qreal dist = std::hypot(dropPos.x() - downPos.x(), dropPos.y() - downPos.y());
+                int idx = -1;
+                for (int i = 0; i < m_home.size(); ++i) {
+                    if (m_home[i].widgetId == id) { idx = i; break; }
+                }
+                m_liftedHome = -1;
+                if (idx >= 0) {
+                    if (dist > 12.0) {
+                        const qreal localX = dropPos.x() - gridX();
+                        const qreal localY = dropPos.y() - (gridTop() - m_homeScroll);
+                        const int maxCol = std::max(0, homeCols() - m_home[idx].w);
+                        const int col = std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, maxCol);
+                        const int row = std::max(0, int(localY / (Layout::kCellH + Layout::kRowGap)));
+                        m_home[idx].x = col;
+                        m_home[idx].y = row;
+                        saveHome();
+                    }
+                    m_lastPlacedWidgets.clear();
+                    update();
+                }
+            }
         }
     }
     gui_list_string_free(&evs);
@@ -616,11 +665,26 @@ void LauncherWindow::drawHome(QPainter &p) {
     }
 
     if (m_liftedHome >= 0 && m_liftedHome < m_home.size()) {
-        const QString comp = m_home[m_liftedHome].component;
-        const int appIdx = m_appIndex.value(comp, -1);
-        const QString label = appIdx >= 0 ? m_apps[appIdx].label : comp;
-        const QRectF r(m_liftPos.x() - cw / 2.0, m_liftPos.y() - Layout::kCellH / 2.0, cw, Layout::kCellH);
-        drawIconAndLabel(p, r, comp, label, 52, true);
+        const auto &lifted = m_home[m_liftedHome];
+        const qreal localX = m_liftPos.x() - gridX();
+        const qreal localY = m_liftPos.y() - (gridTop() - m_homeScroll);
+        if (localX >= 0 && localY >= 0) {
+            const int maxCol = std::max(0, homeCols() - lifted.w);
+            const int col = std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, maxCol);
+            const int row = std::max(0, int(localY / (Layout::kCellH + Layout::kRowGap)));
+            QRectF target = Layout::cellBox({col, row}, cw, lifted.w, lifted.h);
+            target.translate(gridX(), gridTop() - m_homeScroll);
+            p.setPen(QPen(QColor(255, 255, 255, 110), 1.5, Qt::DashLine));
+            p.setBrush(QColor(255, 255, 255, 24));
+            p.drawRoundedRect(target, 16.0, 16.0);
+        }
+        if (!lifted.isWidget()) {
+            const QString comp = lifted.component;
+            const int appIdx = m_appIndex.value(comp, -1);
+            const QString label = appIdx >= 0 ? m_apps[appIdx].label : comp;
+            const QRectF r(m_liftPos.x() - cw / 2.0, m_liftPos.y() - Layout::kCellH / 2.0, cw, Layout::kCellH);
+            drawIconAndLabel(p, r, comp, label, 52, true);
+        }
     }
 }
 
@@ -783,23 +847,32 @@ void LauncherWindow::mouseReleaseEvent(QMouseEvent *event) {
     const QPointF pos = event->position();
 
     if (m_liftedHome >= 0) {
+        const int lifted = m_liftedHome;
+        m_liftedHome = -1;
+        if (!m_dragging) {
+            update();
+            openSheet(SheetKind::HomeItem, lifted);
+            return;
+        }
         const int target = hitHomeSlot(pos);
-        if (target >= 0 && target != m_liftedHome && target < m_home.size()) {
-            std::swap(m_home[m_liftedHome], m_home[target]);
+        if (target >= 0 && target != lifted && target < m_home.size() && !m_home[target].isWidget()) {
+            std::swap(m_home[lifted].x, m_home[target].x);
+            std::swap(m_home[lifted].y, m_home[target].y);
+            std::swap(m_home[lifted], m_home[target]);
             saveHome();
         } else if (target < 0) {
             // Drop into grid coordinates if over empty cell
             const qreal localX = pos.x() - gridX();
             const qreal localY = pos.y() - (gridTop() - m_homeScroll);
             if (localX >= 0 && localY >= 0) {
-                const int col = std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, homeCols() - 1);
+                const int maxCol = std::max(0, homeCols() - m_home[lifted].w);
+                const int col = std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, maxCol);
                 const int row = std::max(0, int(localY / (Layout::kCellH + Layout::kRowGap)));
-                m_home[m_liftedHome].x = col;
-                m_home[m_liftedHome].y = row;
+                m_home[lifted].x = col;
+                m_home[lifted].y = row;
                 saveHome();
             }
         }
-        m_liftedHome = -1;
         update();
         return;
     }
@@ -915,7 +988,10 @@ void LauncherWindow::timerEvent(QTimerEvent *event) {
         if (m_drawerOpen) {
             if (m_pressedDrawer >= 0) openSheet(SheetKind::DrawerApp, m_pressedDrawer);
         } else if (m_pressedHome >= 0) {
-            openSheet(SheetKind::HomeItem, m_pressedHome);
+            m_liftedHome = m_pressedHome;
+            m_liftPos = m_pressPos;
+            ultra_launcher_android_haptic();
+            update();
         } else {
             openSheet(SheetKind::Menu, -1);
         }

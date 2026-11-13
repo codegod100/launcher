@@ -32,7 +32,9 @@ import android.util.SizeF;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -106,7 +108,13 @@ public class LauncherActivity extends NativeActivity {
         launcher = getSystemService(LauncherApps.class);
         launcher.registerCallback(packages, main);
         widgets = AppWidgetManager.getInstance(this);
-        widgetHost = new AppWidgetHost(this, WIDGET_HOST_ID);
+        widgetHost = new AppWidgetHost(this, WIDGET_HOST_ID) {
+            @Override
+            protected AppWidgetHostView onCreateView(android.content.Context context, int appWidgetId,
+                                                     AppWidgetProviderInfo appWidget) {
+                return new DraggableWidgetView(appWidgetId);
+            }
+        };
         widgetLayer = new FrameLayout(this);
         seeThrough();
         getWindow().getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
@@ -473,6 +481,101 @@ public class LauncherActivity extends NativeActivity {
                 v.setVisibility(visible ? View.VISIBLE : View.GONE);
             }
         });
+    }
+
+    private final class DraggableWidgetView extends AppWidgetHostView {
+        private final int widgetId;
+        private final int touchSlop;
+        private boolean lifted = false;
+        private float downRawX, downRawY, lastRawX, lastRawY;
+        private int startWinX, startWinY;
+        private final Runnable longPress;
+
+        DraggableWidgetView(int widgetId) {
+            super(LauncherActivity.this);
+            this.widgetId = widgetId;
+            this.touchSlop = ViewConfiguration.get(LauncherActivity.this).getScaledTouchSlop();
+            this.longPress = () -> {
+                lifted = true;
+                requestDisallowInterceptTouchEvent(true);
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
+                        HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
+                setAlpha(0.88f);
+                setScaleX(1.04f);
+                setScaleY(1.04f);
+                WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
+                startWinX = lp.x;
+                startWinY = lp.y;
+                nativeOnEvent("widget-lift:" + this.widgetId + ":" + lastRawX + ":" + lastRawY);
+            };
+        }
+
+        private void handleMove(MotionEvent ev) {
+            lastRawX = ev.getRawX();
+            lastRawY = ev.getRawY();
+            if (lifted) {
+                WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
+                lp.x = Math.round(startWinX + (lastRawX - downRawX));
+                lp.y = Math.round(startWinY + (lastRawY - downRawY));
+                getWindowManager().updateViewLayout(this, lp);
+                nativeOnEvent("widget-drag:" + lastRawX + ":" + lastRawY);
+            } else if (Math.hypot(lastRawX - downRawX, lastRawY - downRawY) > touchSlop) {
+                main.removeCallbacks(longPress);
+            }
+        }
+
+        private void handleEnd(MotionEvent ev) {
+            main.removeCallbacks(longPress);
+            if (lifted) {
+                lifted = false;
+                setAlpha(1.0f);
+                setScaleX(1.0f);
+                setScaleY(1.0f);
+                nativeOnEvent("widget-drop:" + widgetId + ":" + ev.getRawX() + ":" + ev.getRawY()
+                        + ":" + downRawX + ":" + downRawY);
+            }
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent ev) {
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    lifted = false;
+                    downRawX = lastRawX = ev.getRawX();
+                    downRawY = lastRawY = ev.getRawY();
+                    main.removeCallbacks(longPress);
+                    main.postDelayed(longPress, 450);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    handleMove(ev);
+                    if (lifted) return true;
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    boolean wasLifted = lifted;
+                    handleEnd(ev);
+                    if (wasLifted) return true;
+                    break;
+            }
+            return super.onInterceptTouchEvent(ev);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent ev) {
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_MOVE:
+                    handleMove(ev);
+                    if (lifted) return true;
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    boolean wasLifted = lifted;
+                    handleEnd(ev);
+                    if (wasLifted) return true;
+                    break;
+            }
+            return super.onTouchEvent(ev);
+        }
     }
 
     public void placeWidgets(String json) {
