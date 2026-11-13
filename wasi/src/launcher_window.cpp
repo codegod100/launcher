@@ -370,6 +370,17 @@ void LauncherWindow::pollHostEvents() {
                     update();
                 }
             }
+        } else if (ev.startsWith(QLatin1String("search:"))) {
+            m_search = ev.mid(7);
+            m_drawerScroll = 0.0;
+            update();
+        } else if (ev == QLatin1String("search-submit")) {
+            const QVector<AppInfo> list = filteredApps();
+            if (!list.isEmpty()) {
+                gui_string_t c = toWitStr(list.first().component);
+                ultra_launcher_android_launch(&c);
+                gui_string_free(&c);
+            }
         }
     }
     gui_list_string_free(&evs);

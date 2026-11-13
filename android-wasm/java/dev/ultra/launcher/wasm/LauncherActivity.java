@@ -27,6 +27,9 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.UserHandle;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.util.SizeF;
 import android.view.Gravity;
@@ -39,7 +42,9 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
@@ -88,6 +93,8 @@ public class LauncherActivity extends NativeActivity {
     private final int[] layerAt = new int[2];
     private int pendingWidget = -1;
     private String pendingProvider = "";
+    private EditText searchInput;
+    private boolean suppressSearchWatch = false;
 
     private final LauncherApps.Callback packages = new LauncherApps.Callback() {
         @Override public void onPackageRemoved(String pkg, UserHandle u) { appsChanged(pkg); }
@@ -116,6 +123,34 @@ public class LauncherActivity extends NativeActivity {
             }
         };
         widgetLayer = new FrameLayout(this);
+        searchInput = new EditText(this);
+        searchInput.setAlpha(0f);
+        searchInput.setBackgroundColor(Color.TRANSPARENT);
+        searchInput.setTextColor(Color.TRANSPARENT);
+        searchInput.setCursorVisible(false);
+        searchInput.setSingleLine(true);
+        searchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        searchInput.setImeOptions(EditorInfo.IME_ACTION_GO);
+        searchInput.setFocusableInTouchMode(true);
+        searchInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable s) {
+                if (!suppressSearchWatch) {
+                    nativeOnEvent("search:" + s.toString());
+                }
+            }
+        });
+        searchInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE
+                    || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN)) {
+                nativeOnEvent("search-submit");
+                return true;
+            }
+            return false;
+        });
+        getWindow().addContentView(searchInput, new ViewGroup.LayoutParams(1, 1));
         seeThrough();
         getWindow().getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
             onInsets(insets);
@@ -370,9 +405,18 @@ public class LauncherActivity extends NativeActivity {
     public void setTextInput(boolean active) {
         main.post(() -> {
             InputMethodManager imm = getSystemService(InputMethodManager.class);
-            if (imm == null) return;
-            if (active) imm.showSoftInput(getWindow().getDecorView(), 0);
-            else imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+            if (imm == null || searchInput == null) return;
+            if (active) {
+                searchInput.setFocusableInTouchMode(true);
+                searchInput.requestFocus();
+                imm.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
+            } else {
+                imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+                suppressSearchWatch = true;
+                searchInput.setText("");
+                suppressSearchWatch = false;
+                searchInput.clearFocus();
+            }
         });
     }
 
