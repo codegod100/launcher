@@ -506,19 +506,25 @@ public class LauncherActivity extends NativeActivity {
                 WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
                 startWinX = lp.x;
                 startWinY = lp.y;
-                nativeOnEvent("widget-lift:" + this.widgetId + ":" + lastRawX + ":" + lastRawY);
+                nativeOnEvent("widget-lift:" + this.widgetId + ":" + startWinX + ":" + startWinY);
             };
         }
+
+        boolean isLifted() { return lifted; }
 
         private void handleMove(MotionEvent ev) {
             lastRawX = ev.getRawX();
             lastRawY = ev.getRawY();
             if (lifted) {
                 WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
-                lp.x = Math.round(startWinX + (lastRawX - downRawX));
-                lp.y = Math.round(startWinY + (lastRawY - downRawY));
-                getWindowManager().updateViewLayout(this, lp);
-                nativeOnEvent("widget-drag:" + lastRawX + ":" + lastRawY);
+                int nx = Math.round(startWinX + (lastRawX - downRawX));
+                int ny = Math.round(startWinY + (lastRawY - downRawY));
+                if (nx != lp.x || ny != lp.y) {
+                    lp.x = nx;
+                    lp.y = ny;
+                    getWindowManager().updateViewLayout(this, lp);
+                    nativeOnEvent("widget-drag:" + nx + ":" + ny);
+                }
             } else if (Math.hypot(lastRawX - downRawX, lastRawY - downRawY) > touchSlop) {
                 main.removeCallbacks(longPress);
             }
@@ -531,8 +537,10 @@ public class LauncherActivity extends NativeActivity {
                 setAlpha(1.0f);
                 setScaleX(1.0f);
                 setScaleY(1.0f);
-                nativeOnEvent("widget-drop:" + widgetId + ":" + ev.getRawX() + ":" + ev.getRawY()
-                        + ":" + downRawX + ":" + downRawY);
+                int finalX = Math.round(startWinX + (ev.getRawX() - downRawX));
+                int finalY = Math.round(startWinY + (ev.getRawY() - downRawY));
+                float dist = (float) Math.hypot(ev.getRawX() - downRawX, ev.getRawY() - downRawY);
+                nativeOnEvent("widget-drop:" + widgetId + ":" + finalX + ":" + finalY + ":" + dist);
             }
         }
 
@@ -622,6 +630,9 @@ public class LauncherActivity extends NativeActivity {
                 lp.token = getWindow().getDecorView().getWindowToken();
 
                 AppWidgetHostView v = widgetViews.get(id);
+                if (v instanceof DraggableWidgetView && ((DraggableWidgetView) v).isLifted()) {
+                    continue;
+                }
                 if (v == null) {
                     AppWidgetProviderInfo info = widgets.getAppWidgetInfo(id);
                     if (info == null) continue;

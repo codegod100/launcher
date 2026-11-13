@@ -334,12 +334,11 @@ void LauncherWindow::pollHostEvents() {
             }
         } else if (ev.startsWith(QLatin1String("widget-drop:"))) {
             const QStringList parts = ev.mid(12).split(QLatin1Char(':'));
-            if (parts.size() >= 5) {
+            if (parts.size() >= 4) {
                 const int id = parts[0].toInt();
                 const qreal dpr = devicePixelRatio();
-                const QPointF dropPos(parts[1].toDouble() / dpr, parts[2].toDouble() / dpr);
-                const QPointF downPos(parts[3].toDouble() / dpr, parts[4].toDouble() / dpr);
-                const qreal dist = std::hypot(dropPos.x() - downPos.x(), dropPos.y() - downPos.y());
+                const QPointF winPos(parts[1].toDouble() / dpr, parts[2].toDouble() / dpr);
+                const qreal dist = parts[3].toDouble() / dpr;
                 int idx = -1;
                 for (int i = 0; i < m_home.size(); ++i) {
                     if (m_home[i].widgetId == id) { idx = i; break; }
@@ -347,11 +346,11 @@ void LauncherWindow::pollHostEvents() {
                 m_liftedHome = -1;
                 if (idx >= 0) {
                     if (dist > 12.0) {
-                        const qreal localX = dropPos.x() - gridX();
-                        const qreal localY = dropPos.y() - (gridTop() - m_homeScroll);
+                        const qreal localX = winPos.x() - gridX();
+                        const qreal localY = winPos.y() - (gridTop() - m_homeScroll);
                         const int maxCol = std::max(0, homeCols() - m_home[idx].w);
-                        const int col = std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, maxCol);
-                        const int row = std::max(0, int(localY / (Layout::kCellH + Layout::kRowGap)));
+                        const int col = std::clamp(int(std::lround(localX / (homeColW() + Layout::kColGap))), 0, maxCol);
+                        const int row = std::max(0, int(std::lround(localY / (Layout::kCellH + Layout::kRowGap))));
                         m_home[idx].x = col;
                         m_home[idx].y = row;
                         saveHome();
@@ -637,7 +636,7 @@ void LauncherWindow::drawHome(QPainter &p) {
     const qreal dpr = devicePixelRatio();
     QJsonArray placedWidgets;
     for (int i = 0; i < m_home.size(); ++i) {
-        if (i == m_liftedHome || packed.cells[i].col < 0) continue;
+        if (packed.cells[i].col < 0) continue;
         const auto &slot = m_home[i];
         QRectF r = Layout::cellBox(packed.cells[i], cw, slot.w, slot.h);
         r.translate(gridX(), gridTop() - m_homeScroll);
@@ -651,6 +650,7 @@ void LauncherWindow::drawHome(QPainter &p) {
             placedWidgets.append(entry);
             continue;
         }
+        if (i == m_liftedHome) continue;
         if (r.bottom() < gridTop() || r.top() > height()) continue;
         const int appIdx = m_appIndex.value(slot.component, -1);
         const QString label = appIdx >= 0 ? m_apps[appIdx].label : slot.component.section(QLatin1Char('/'), 0, 0);
@@ -668,16 +668,18 @@ void LauncherWindow::drawHome(QPainter &p) {
         const auto &lifted = m_home[m_liftedHome];
         const qreal localX = m_liftPos.x() - gridX();
         const qreal localY = m_liftPos.y() - (gridTop() - m_homeScroll);
-        if (localX >= 0 && localY >= 0) {
-            const int maxCol = std::max(0, homeCols() - lifted.w);
-            const int col = std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, maxCol);
-            const int row = std::max(0, int(localY / (Layout::kCellH + Layout::kRowGap)));
-            QRectF target = Layout::cellBox({col, row}, cw, lifted.w, lifted.h);
-            target.translate(gridX(), gridTop() - m_homeScroll);
-            p.setPen(QPen(QColor(255, 255, 255, 110), 1.5, Qt::DashLine));
-            p.setBrush(QColor(255, 255, 255, 24));
-            p.drawRoundedRect(target, 16.0, 16.0);
-        }
+        const int maxCol = std::max(0, homeCols() - lifted.w);
+        const int col = lifted.isWidget()
+            ? std::clamp(int(std::lround(localX / (homeColW() + Layout::kColGap))), 0, maxCol)
+            : std::clamp(int(localX / (homeColW() + Layout::kColGap)), 0, maxCol);
+        const int row = lifted.isWidget()
+            ? std::max(0, int(std::lround(localY / (Layout::kCellH + Layout::kRowGap))))
+            : std::max(0, int(localY / (Layout::kCellH + Layout::kRowGap)));
+        QRectF target = Layout::cellBox({col, row}, cw, lifted.w, lifted.h);
+        target.translate(gridX(), gridTop() - m_homeScroll);
+        p.setPen(QPen(QColor(255, 255, 255, 110), 1.5, Qt::DashLine));
+        p.setBrush(QColor(255, 255, 255, 24));
+        p.drawRoundedRect(target, 16.0, 16.0);
         if (!lifted.isWidget()) {
             const QString comp = lifted.component;
             const int appIdx = m_appIndex.value(comp, -1);
