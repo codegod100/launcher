@@ -261,6 +261,13 @@ public class HomeActivity extends QtActivity {
 
     /** packages: the ones that changed, comma-separated, so only their icons are redrawn. */
     private void appsChanged(String packages) {
+        if (packages != null && !packages.isEmpty()) {
+            for (String pkg : packages.split(",")) {
+                if (pkg.isEmpty()) continue;
+                String prefix = pkg + "/";
+                activities.keySet().removeIf(k -> k.startsWith(prefix));
+            }
+        }
         if (qtReady) Native.appsChanged(packages == null ? "" : packages);
     }
 
@@ -284,16 +291,19 @@ public class HomeActivity extends QtActivity {
             Collator by = Collator.getInstance();
             list.sort((x, y) -> by.compare(labels.get(x), labels.get(y)));
             JSONArray out = new JSONArray();
+            java.util.Set<String> seen = new java.util.HashSet<>();
             for (LauncherActivityInfo i : list) {
                 ComponentName cn = i.getComponentName();
                 if (cn.getPackageName().equals(a.getPackageName())) continue;
                 String c = cn.flattenToShortString();
+                seen.add(c);
                 a.activities.put(c, i);
                 JSONObject o = new JSONObject().put("label", labels.get(i)).put("component", c);
                 // System apps can't be uninstalled, so the drawer offers no Uninstall for them.
                 if ((i.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) != 0) o.put("system", true);
                 out.put(o);
             }
+            a.activities.keySet().retainAll(seen);
             return new JSONObject().put("apps", out).toString();
         } catch (JSONException | RuntimeException e) {
             Log.w("ultra", "listing apps", e);
@@ -384,7 +394,7 @@ public class HomeActivity extends QtActivity {
         try {
             String pkg = key.substring(2).split("/", 2)[0];
             long stamp = getPackageManager().getPackageInfo(pkg, 0).lastUpdateTime;
-            String id = key + "|" + size + "|" + stamp + "|" + getResources().getDisplayMetrics().densityDpi;
+            String id = "v2|" + key + "|" + size + "|" + stamp + "|" + getResources().getDisplayMetrics().densityDpi;
             byte[] h = MessageDigest.getInstance("SHA-1").digest(id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             StringBuilder name = new StringBuilder();
             for (byte b : h) name.append(String.format("%02x", b));
