@@ -10,6 +10,7 @@ interface android {
     uninstall: func(component: string);
     open-settings: func();
     pick-wallpaper: func();
+    open-recents: func();
     haptic: func();
     /// System bar insets in physical screen pixels: (top, bottom).
     insets: func() -> tuple<u32, u32>;

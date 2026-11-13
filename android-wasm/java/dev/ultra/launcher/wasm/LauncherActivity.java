@@ -298,6 +298,24 @@ public class LauncherActivity extends NativeActivity {
                 new Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
     }
 
+    public void openRecents() {
+        main.post(() -> {
+            if (RecentsService.showRecents()) return;
+            Toast.makeText(this, "Turn on \"ultra Wasm window list\" to show open windows", Toast.LENGTH_LONG).show();
+            String me = new ComponentName(this, RecentsService.class).flattenToString();
+            Bundle args = new Bundle();
+            args.putString(":settings:fragment_args_key", me);
+            try {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        .putExtra(":settings:fragment_args_key", me)
+                        .putExtra(":settings:show_fragment_args", args)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (ActivityNotFoundException e) {
+                Toast.makeText(this, "Not available on this device", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     public void haptic() {
         main.post(() -> getWindow().getDecorView().performHapticFeedback(
                 HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING));

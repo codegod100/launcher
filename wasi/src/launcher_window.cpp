@@ -435,7 +435,7 @@ void LauncherWindow::drawIconAndLabel(QPainter &p, const QRectF &box, const QStr
 }
 
 void LauncherWindow::drawHome(QPainter &p) {
-    // Top pill ("Apps")
+    // Top pill ("Windows" -> opens system Recents / window list)
     const QRectF pill = appsPillRect();
     p.setPen(QPen(QColor(255, 255, 255, 55), 1.0));
     p.setBrush(QColor(24, 24, 30, 135));
@@ -446,7 +446,7 @@ void LauncherWindow::drawHome(QPainter &p) {
     f.setWeight(QFont::Medium);
     p.setFont(f);
     p.setPen(Qt::white);
-    p.drawText(pill, Qt::AlignCenter, QStringLiteral("Apps"));
+    p.drawText(pill, Qt::AlignCenter, QStringLiteral("Windows"));
 
     if (m_home.isEmpty()) {
         f.setPixelSize(14);
@@ -455,7 +455,7 @@ void LauncherWindow::drawHome(QPainter &p) {
         p.setPen(QColor(255, 255, 255, 190));
         p.drawText(QRectF(gridX(), gridTop() + 40.0, gridW(), 60.0),
                    Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap,
-                   QStringLiteral("Swipe down or tap Apps • Long press for menu"));
+                   QStringLiteral("Swipe down for Apps • Long press for menu"));
         return;
     }
 
@@ -705,7 +705,7 @@ void LauncherWindow::mouseReleaseEvent(QMouseEvent *event) {
     }
 
     if (appsPillRect().contains(pos)) {
-        openDrawer();
+        ultra_launcher_android_open_recents();
         return;
     }
 

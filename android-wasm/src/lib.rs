@@ -202,6 +202,9 @@ impl ultra::launcher::android::Host for HostState {
     fn pick_wallpaper(&mut self) {
         self.call_void("pickWallpaper", "()V", &[]);
     }
+    fn open_recents(&mut self) {
+        self.call_void("openRecents", "()V", &[]);
+    }
     fn haptic(&mut self) {
         self.call_void("haptic", "()V", &[]);
     }
