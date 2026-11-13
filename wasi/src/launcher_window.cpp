@@ -351,6 +351,17 @@ void LauncherWindow::pollHostEvents() {
                         const int maxCol = std::max(0, homeCols() - m_home[idx].w);
                         const int col = std::clamp(int(std::lround(localX / (homeColW() + Layout::kColGap))), 0, maxCol);
                         const int row = std::max(0, int(std::lround(localY / (Layout::kCellH + Layout::kRowGap))));
+                        const int ww = m_home[idx].w;
+                        const int wh = m_home[idx].h;
+                        // Unpin any app icons overlapping the widget's target rect so they reflow around it.
+                        for (int i = 0; i < m_home.size(); ++i) {
+                            if (i == idx || m_home[i].isWidget()) continue;
+                            if (m_home[i].x >= col && m_home[i].x < col + ww
+                                && m_home[i].y >= row && m_home[i].y < row + wh) {
+                                m_home[i].x = -1;
+                                m_home[i].y = -1;
+                            }
+                        }
                         m_home[idx].x = col;
                         m_home[idx].y = row;
                         saveHome();

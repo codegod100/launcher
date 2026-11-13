@@ -545,7 +545,7 @@ public class LauncherActivity extends NativeActivity {
         }
 
         @Override
-        public boolean onInterceptTouchEvent(MotionEvent ev) {
+        public boolean dispatchTouchEvent(MotionEvent ev) {
             switch (ev.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     lifted = false;
@@ -553,36 +553,20 @@ public class LauncherActivity extends NativeActivity {
                     downRawY = lastRawY = ev.getRawY();
                     main.removeCallbacks(longPress);
                     main.postDelayed(longPress, 450);
-                    break;
+                    super.dispatchTouchEvent(ev);
+                    return true;
                 case MotionEvent.ACTION_MOVE:
                     handleMove(ev);
                     if (lifted) return true;
-                    break;
+                    return super.dispatchTouchEvent(ev);
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     boolean wasLifted = lifted;
                     handleEnd(ev);
                     if (wasLifted) return true;
-                    break;
+                    return super.dispatchTouchEvent(ev);
             }
-            return super.onInterceptTouchEvent(ev);
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent ev) {
-            switch (ev.getActionMasked()) {
-                case MotionEvent.ACTION_MOVE:
-                    handleMove(ev);
-                    if (lifted) return true;
-                    break;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    boolean wasLifted = lifted;
-                    handleEnd(ev);
-                    if (wasLifted) return true;
-                    break;
-            }
-            return super.onTouchEvent(ev);
+            return super.dispatchTouchEvent(ev);
         }
     }
 

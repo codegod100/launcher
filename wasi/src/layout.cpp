@@ -37,17 +37,21 @@ PackedGrid packHome(const QVector<HomeSlot> &items, int cols, const QSet<QString
         }
     };
 
-    // Pass 1: place pinned slots first if their area is free.
+    // Pass 1: place pinned slots first (widgets before apps) if their area is free.
     QVector<bool> placed(items.size(), false);
-    for (int i = 0; i < items.size(); ++i) {
-        const auto &s = items[i];
-        if (!s.isWidget() && hidden.contains(s.component)) continue;
-        const int w = std::clamp(s.w, 1, cols);
-        const int h = std::max(1, s.h);
-        if (s.x >= 0 && s.y >= 0 && isFree(s.x, s.y, w, h)) {
-            occupy(s.x, s.y, w, h);
-            out.cells[i] = {s.x, s.y};
-            placed[i] = true;
+    for (int pass = 0; pass < 2; ++pass) {
+        const bool wantWidget = (pass == 0);
+        for (int i = 0; i < items.size(); ++i) {
+            const auto &s = items[i];
+            if (s.isWidget() != wantWidget) continue;
+            if (!s.isWidget() && hidden.contains(s.component)) continue;
+            const int w = std::clamp(s.w, 1, cols);
+            const int h = std::max(1, s.h);
+            if (s.x >= 0 && s.y >= 0 && isFree(s.x, s.y, w, h)) {
+                occupy(s.x, s.y, w, h);
+                out.cells[i] = {s.x, s.y};
+                placed[i] = true;
+            }
         }
     }
 
