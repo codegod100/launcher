@@ -46,8 +46,11 @@ LauncherWindow::LauncherWindow() {
     resize(412, 892);
 
     refreshInsets();
-    loadHome();
     refreshApps();
+    loadHome();
+    if (m_home.isEmpty() && !QFile::exists(QStringLiteral("/data/home.json"))) {
+        seedDefaultHome();
+    }
     m_pollTimer.start(100, this);
 }
 
@@ -87,6 +90,25 @@ void LauncherWindow::refreshApps() {
     update();
 }
 
+void LauncherWindow::refreshWidgetProviders() {
+    gui_string_t raw{};
+    ultra_launcher_android_widget_providers(&raw);
+    QByteArray json = fromWitBytes(raw);
+    gui_string_free(&raw);
+
+    m_providers.clear();
+    QJsonDocument doc = QJsonDocument::fromJson(json);
+    for (const QJsonValue &v : doc.array()) {
+        QJsonObject o = v.toObject();
+        WidgetProviderInfo info;
+        info.provider = o.value(QStringLiteral("provider")).toString();
+        info.label = o.value(QStringLiteral("label")).toString();
+        info.w = std::max(1, o.value(QStringLiteral("w")).toInt(2));
+        info.h = std::max(1, o.value(QStringLiteral("h")).toInt(2));
+        if (!info.provider.isEmpty()) m_providers.append(info);
+    }
+}
+
 void LauncherWindow::loadHome() {
     QFile f(QStringLiteral("/data/home.json"));
     if (!f.open(QIODevice::ReadOnly)) return;
@@ -95,16 +117,79 @@ void LauncherWindow::loadHome() {
     m_home.clear();
     for (const QJsonValue &v : doc.array()) {
         QJsonObject o = v.toObject();
-        if (o.value(QStringLiteral("kind")).toString(QStringLiteral("app")) != QLatin1String("app"))
-            continue;
-        QString comp = o.value(QStringLiteral("str")).toString();
-        if (comp.isEmpty()) continue;
+        const QString kind = o.value(QStringLiteral("kind")).toString(QStringLiteral("app"));
         Layout::HomeSlot slot;
-        slot.component = comp;
         slot.x = o.value(QStringLiteral("x")).toInt(-1);
         slot.y = o.value(QStringLiteral("y")).toInt(-1);
+        if (kind == QLatin1String("widget")) {
+            slot.widgetId = o.value(QStringLiteral("id")).toInt(-1);
+            slot.provider = o.value(QStringLiteral("str")).toString();
+            slot.w = std::max(1, o.value(QStringLiteral("w")).toInt(2));
+            slot.h = std::max(1, o.value(QStringLiteral("h")).toInt(2));
+            if (slot.widgetId < 0) continue;
+        } else {
+            slot.component = o.value(QStringLiteral("str")).toString();
+            if (slot.component.isEmpty()) continue;
+        }
         m_home.append(slot);
         if (m_home.size() >= 200) break;
+    }
+}
+
+void LauncherWindow::seedDefaultHome() {
+    struct SeedApp { const char *label; int x; int y; int nth; };
+    static const SeedApp kSeeds[] = {
+        {"Maps", 0, 0, 0},
+        {"Muse", 1, 0, 0},
+        {"Claude", 2, 0, 0},
+        {"Claude", 3, 0, 0},
+        {"Transit", 4, 0, 0},
+        {"Chrome", 0, 1, 0},
+        {"Coinbase", 1, 1, 0},
+        {"Cash App", 2, 1, 0},
+        {"Webby", 3, 1, 0},
+        {"Amazon Shopping", 4, 1, 0},
+        {"Bluesky", 0, 2, 0},
+        {"HEY Calendar", 1, 2, 0},
+        {"fanchat", 2, 2, 0},
+        {"Files", 0, 3, 0},
+    };
+    for (const SeedApp &seed : kSeeds) {
+        const QString want = QString::fromUtf8(seed.label);
+        QString comp;
+        for (const AppInfo &a : m_apps) {
+            if (a.label.compare(want, Qt::CaseInsensitive) == 0) {
+                comp = a.component;
+                break;
+            }
+        }
+        if (comp.isEmpty()) {
+            for (const AppInfo &a : m_apps) {
+                if (a.label.startsWith(want, Qt::CaseInsensitive)) {
+                    comp = a.component;
+                    break;
+                }
+            }
+        }
+        if (!comp.isEmpty()) {
+            Layout::HomeSlot s;
+            s.component = comp;
+            s.x = seed.x;
+            s.y = seed.y;
+            m_home.append(s);
+        }
+    }
+    saveHome();
+
+    // Also request binding the two widgets from the original home screen.
+    const char *kDefaultWidgets[] = {
+        "com.google.android.apps.weather/com.google.android.apps.weather.widget.CurrentForecastWidgetReceiver",
+        "com.probadosoft.moonphasecalendar/com.probadosoft.moonphasecalendar.AppWidget",
+    };
+    for (const char *p : kDefaultWidgets) {
+        gui_string_t witP = toWitStr(QString::fromUtf8(p));
+        ultra_launcher_android_add_widget(&witP);
+        gui_string_free(&witP);
     }
 }
 
@@ -113,8 +198,16 @@ void LauncherWindow::saveHome() const {
     QJsonArray arr;
     for (const auto &s : m_home) {
         QJsonObject o;
-        o.insert(QStringLiteral("kind"), QStringLiteral("app"));
-        o.insert(QStringLiteral("str"), s.component);
+        if (s.isWidget()) {
+            o.insert(QStringLiteral("kind"), QStringLiteral("widget"));
+            o.insert(QStringLiteral("id"), s.widgetId);
+            o.insert(QStringLiteral("str"), s.provider);
+            o.insert(QStringLiteral("w"), s.w);
+            o.insert(QStringLiteral("h"), s.h);
+        } else {
+            o.insert(QStringLiteral("kind"), QStringLiteral("app"));
+            o.insert(QStringLiteral("str"), s.component);
+        }
         o.insert(QStringLiteral("x"), s.x);
         o.insert(QStringLiteral("y"), s.y);
         arr.append(o);
@@ -196,6 +289,28 @@ void LauncherWindow::pollHostEvents() {
                 }
             }
             changedApps = true;
+        } else if (ev.startsWith(QLatin1String("widget-added:"))) {
+            const QString rest = ev.mid(13);
+            const int sep = rest.indexOf(QLatin1Char(':'));
+            const int id = (sep >= 0 ? rest.left(sep) : rest).toInt();
+            const QString prov = sep >= 0 ? rest.mid(sep + 1) : QString();
+            if (id >= 0) {
+                Layout::HomeSlot ws;
+                ws.widgetId = id;
+                ws.provider = prov;
+                ws.w = 2;
+                ws.h = 2;
+                if (prov.contains(QLatin1String("CurrentForecastWidgetReceiver"))) {
+                    ws.x = 3;
+                    ws.y = 2;
+                } else if (prov.contains(QLatin1String("moonphasecalendar"))) {
+                    ws.x = 0;
+                    ws.y = 5;
+                }
+                m_home.append(ws);
+                saveHome();
+                update();
+            }
         }
     }
     gui_list_string_free(&evs);
@@ -252,7 +367,7 @@ int LauncherWindow::hitHomeSlot(const QPointF &pos) const {
     const auto packed = Layout::packHome(m_home, homeCols(), hidden);
     const qreal cw = homeColW();
     for (int i = 0; i < packed.cells.size(); ++i) {
-        if (packed.cells[i].col < 0) continue;
+        if (packed.cells[i].col < 0 || m_home[i].isWidget()) continue;
         QRectF r = Layout::cellBox(packed.cells[i], cw);
         r.translate(gridX(), gridTop() - m_homeScroll);
         if (r.contains(pos)) return i;
@@ -369,7 +484,9 @@ void LauncherWindow::triggerSheetAction(int actionIdx) {
                 if (existing >= 0) {
                     m_home.removeAt(existing);
                 } else if (m_home.size() < 200) {
-                    m_home.append({app.component, -1, -1});
+                    Layout::HomeSlot slot;
+                    slot.component = app.component;
+                    m_home.append(slot);
                 }
                 saveHome();
                 update();
@@ -399,6 +516,12 @@ void LauncherWindow::paintEvent(QPaintEvent *) {
     p.setCompositionMode(QPainter::CompositionMode_Source);
     p.fillRect(QRect(QPoint(0, 0), size()), Qt::transparent);
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+
+    const bool showWidgets = !m_drawerOpen && m_sheet == SheetKind::None;
+    if (showWidgets != m_lastWidgetsVisible) {
+        m_lastWidgetsVisible = showWidgets;
+        ultra_launcher_android_set_widgets_visible(showWidgets);
+    }
 
     if (m_drawerOpen) drawDrawer(p);
     else drawHome(p);
@@ -462,14 +585,34 @@ void LauncherWindow::drawHome(QPainter &p) {
     QSet<QString> hidden;
     const auto packed = Layout::packHome(m_home, homeCols(), hidden);
     const qreal cw = homeColW();
+    const qreal dpr = devicePixelRatio();
+    QJsonArray placedWidgets;
     for (int i = 0; i < m_home.size(); ++i) {
         if (i == m_liftedHome || packed.cells[i].col < 0) continue;
-        QRectF r = Layout::cellBox(packed.cells[i], cw);
+        const auto &slot = m_home[i];
+        QRectF r = Layout::cellBox(packed.cells[i], cw, slot.w, slot.h);
         r.translate(gridX(), gridTop() - m_homeScroll);
+        if (slot.isWidget()) {
+            QJsonArray entry;
+            entry.append(slot.widgetId);
+            entry.append(int(std::lround(r.x() * dpr)));
+            entry.append(int(std::lround(r.y() * dpr)));
+            entry.append(int(std::lround(r.width() * dpr)));
+            entry.append(int(std::lround(r.height() * dpr)));
+            placedWidgets.append(entry);
+            continue;
+        }
         if (r.bottom() < gridTop() || r.top() > height()) continue;
-        const int appIdx = m_appIndex.value(m_home[i].component, -1);
-        const QString label = appIdx >= 0 ? m_apps[appIdx].label : m_home[i].component.section(QLatin1Char('/'), 0, 0);
-        drawIconAndLabel(p, r, m_home[i].component, label, 52, false);
+        const int appIdx = m_appIndex.value(slot.component, -1);
+        const QString label = appIdx >= 0 ? m_apps[appIdx].label : slot.component.section(QLatin1Char('/'), 0, 0);
+        drawIconAndLabel(p, r, slot.component, label, 52, false);
+    }
+    const QString placedJson = QString::fromUtf8(QJsonDocument(placedWidgets).toJson(QJsonDocument::Compact));
+    if (placedJson != m_lastPlacedWidgets) {
+        m_lastPlacedWidgets = placedJson;
+        gui_string_t witJson = toWitStr(placedJson);
+        ultra_launcher_android_place_widgets(&witJson);
+        gui_string_free(&witJson);
     }
 
     if (m_liftedHome >= 0 && m_liftedHome < m_home.size()) {

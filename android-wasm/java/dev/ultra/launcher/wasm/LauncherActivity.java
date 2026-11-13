@@ -1,6 +1,10 @@
 package dev.ultra.launcher.wasm;
 
 import android.app.NativeActivity;
+import android.appwidget.AppWidgetHost;
+import android.appwidget.AppWidgetHostView;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetProviderInfo;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Intent;
@@ -24,12 +28,17 @@ import android.os.Process;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.Log;
+import android.util.SizeF;
+import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -66,6 +75,18 @@ public class LauncherActivity extends NativeActivity {
     private final Map<String, LauncherActivityInfo> activities = new ConcurrentHashMap<>();
     private final Object iconLock = new Object();
 
+    private static final int WIDGET_HOST_ID = 369;
+    private static final int REQ_BIND_WIDGET = 101;
+    private static final int REQ_CONFIGURE_WIDGET = 102;
+    private AppWidgetManager widgets;
+    private AppWidgetHost widgetHost;
+    private FrameLayout widgetLayer;
+    private final Map<Integer, AppWidgetHostView> widgetViews = new HashMap<>();
+    private final Map<Integer, Long> widgetSizes = new HashMap<>();
+    private final int[] layerAt = new int[2];
+    private int pendingWidget = -1;
+    private String pendingProvider = "";
+
     private final LauncherApps.Callback packages = new LauncherApps.Callback() {
         @Override public void onPackageRemoved(String pkg, UserHandle u) { appsChanged(pkg); }
         @Override public void onPackageAdded(String pkg, UserHandle u) { appsChanged(pkg); }
@@ -84,12 +105,29 @@ public class LauncherActivity extends NativeActivity {
         super.onCreate(savedInstanceState);
         launcher = getSystemService(LauncherApps.class);
         launcher.registerCallback(packages, main);
+        widgets = AppWidgetManager.getInstance(this);
+        widgetHost = new AppWidgetHost(this, WIDGET_HOST_ID);
+        widgetLayer = new FrameLayout(this);
         seeThrough();
         getWindow().getDecorView().setOnApplyWindowInsetsListener((v, insets) -> {
             onInsets(insets);
             return v.onApplyWindowInsets(insets);
         });
         getWindow().getDecorView().requestApplyInsets();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (widgetHost != null) widgetHost.startListening();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (widgetHost != null) {
+            try { widgetHost.stopListening(); } catch (RuntimeException ignored) { }
+        }
     }
 
     private void seeThrough() {
@@ -327,6 +365,184 @@ public class LauncherActivity extends NativeActivity {
             if (imm == null) return;
             if (active) imm.showSoftInput(getWindow().getDecorView(), 0);
             else imm.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(), 0);
+        });
+    }
+
+    public String widgetProviders() {
+        JSONArray out = new JSONArray();
+        PackageManager pm = getPackageManager();
+        for (AppWidgetProviderInfo info : widgets.getInstalledProvidersForProfile(user)) {
+            if (info.provider == null) continue;
+            JSONObject o = new JSONObject();
+            try {
+                o.put("provider", info.provider.flattenToString());
+                o.put("label", info.loadLabel(pm));
+                o.put("w", Math.max(1, Math.min(5, (info.minWidth + 69) / 70)));
+                o.put("h", Math.max(1, Math.min(5, (info.minHeight + 69) / 70)));
+                out.put(o);
+            } catch (JSONException ignored) {
+            }
+        }
+        return out.toString();
+    }
+
+    public void addWidget(String provider) {
+        main.post(() -> {
+            ComponentName cn = ComponentName.unflattenFromString(provider);
+            if (cn == null) return;
+            AppWidgetProviderInfo target = null;
+            for (AppWidgetProviderInfo info : widgets.getInstalledProvidersForProfile(user)) {
+                if (cn.equals(info.provider)) { target = info; break; }
+            }
+            if (target == null) return;
+            int id = widgetHost.allocateAppWidgetId();
+            pendingWidget = id;
+            pendingProvider = provider;
+            if (widgets.bindAppWidgetIdIfAllowed(id, user, target.provider, null)) {
+                configureWidget(id);
+            } else {
+                Intent i = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, target.provider)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, user);
+                try {
+                    startActivityForResult(i, REQ_BIND_WIDGET);
+                } catch (ActivityNotFoundException e) {
+                    dropPendingWidget();
+                }
+            }
+        });
+    }
+
+    private void configureWidget(int id) {
+        AppWidgetProviderInfo w = widgets.getAppWidgetInfo(id);
+        if (w != null && w.configure != null) {
+            try {
+                widgetHost.startAppWidgetConfigureActivityForResult(this, id, 0, REQ_CONFIGURE_WIDGET, null);
+                return;
+            } catch (ActivityNotFoundException | SecurityException ignored) {
+            }
+        }
+        finishPendingWidget(id);
+    }
+
+    private void finishPendingWidget(int id) {
+        String prov = pendingProvider;
+        pendingWidget = -1;
+        pendingProvider = "";
+        nativeOnEvent("widget-added:" + id + ":" + prov);
+    }
+
+    private void dropPendingWidget() {
+        if (pendingWidget != -1) widgetHost.deleteAppWidgetId(pendingWidget);
+        pendingWidget = -1;
+        pendingProvider = "";
+    }
+
+    @Override
+    protected void onActivityResult(int req, int result, Intent data) {
+        super.onActivityResult(req, result, data);
+        if (pendingWidget == -1 || (req != REQ_BIND_WIDGET && req != REQ_CONFIGURE_WIDGET)) return;
+        if (result != RESULT_OK) {
+            dropPendingWidget();
+        } else if (req == REQ_BIND_WIDGET) {
+            configureWidget(pendingWidget);
+        } else {
+            finishPendingWidget(pendingWidget);
+        }
+    }
+
+    private boolean widgetsVisible = true;
+    private String lastPlacedWidgetsJson = "[]";
+
+    public void removeWidget(int id) {
+        main.post(() -> {
+            AppWidgetHostView v = widgetViews.remove(id);
+            if (v != null && v.isAttachedToWindow()) {
+                try { getWindowManager().removeViewImmediate(v); } catch (RuntimeException ignored) { }
+            }
+            widgetSizes.remove(id);
+            widgetHost.deleteAppWidgetId(id);
+        });
+    }
+
+    public void setWidgetsVisible(boolean visible) {
+        main.post(() -> {
+            widgetsVisible = visible;
+            for (AppWidgetHostView v : widgetViews.values()) {
+                v.setVisibility(visible ? View.VISIBLE : View.GONE);
+            }
+        });
+    }
+
+    public void placeWidgets(String json) {
+        main.post(() -> {
+            lastPlacedWidgetsJson = json;
+            if (getWindow().getDecorView().getWindowToken() == null) {
+                getWindow().getDecorView().post(() -> placeWidgets(lastPlacedWidgetsJson));
+                return;
+            }
+            float d = getResources().getDisplayMetrics().density;
+            Map<Integer, int[]> want = new HashMap<>();
+            try {
+                JSONArray arr = new JSONArray(json);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONArray r = arr.getJSONArray(i);
+                    want.put(r.getInt(0), new int[] {
+                            r.getInt(1),
+                            r.getInt(2),
+                            r.getInt(3),
+                            r.getInt(4)
+                    });
+                }
+            } catch (JSONException e) {
+                return;
+            }
+            WindowManager wm = getWindowManager();
+            for (Map.Entry<Integer, AppWidgetHostView> e : widgetViews.entrySet()) {
+                if (!want.containsKey(e.getKey())) e.getValue().setVisibility(View.GONE);
+            }
+            for (Map.Entry<Integer, int[]> e : want.entrySet()) {
+                int id = e.getKey();
+                int[] r = e.getValue();
+                WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                        r[2],
+                        r[3],
+                        WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        PixelFormat.TRANSLUCENT);
+                lp.gravity = Gravity.TOP | Gravity.LEFT;
+                lp.x = r[0];
+                lp.y = r[1];
+                lp.token = getWindow().getDecorView().getWindowToken();
+
+                AppWidgetHostView v = widgetViews.get(id);
+                if (v == null) {
+                    AppWidgetProviderInfo info = widgets.getAppWidgetInfo(id);
+                    if (info == null) continue;
+                    v = widgetHost.createView(this, id, info);
+                    widgetViews.put(id, v);
+                    v.setVisibility(widgetsVisible ? View.VISIBLE : View.GONE);
+                    wm.addView(v, lp);
+                } else {
+                    v.setVisibility(widgetsVisible ? View.VISIBLE : View.GONE);
+                    wm.updateViewLayout(v, lp);
+                }
+                int wdp = Math.round(r[2] / d), hdp = Math.round(r[3] / d);
+                long size = ((long) wdp << 32) | hdp;
+                Long was = widgetSizes.put(id, size);
+                if (was == null || was != size) {
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        List<SizeF> sizes = new ArrayList<>();
+                        sizes.add(new SizeF(wdp, hdp));
+                        v.updateAppWidgetSize(new Bundle(), sizes);
+                    } else {
+                        v.updateAppWidgetSize(new Bundle(), wdp, hdp, wdp, hdp);
+                    }
+                }
+            }
         });
     }
 }

@@ -12,9 +12,15 @@ inline constexpr qreal kColGap = 6.0;
 inline constexpr qreal kRowGap = 12.0;
 
 struct HomeSlot {
-    QString component;
+    QString component; // non-empty for app slots
+    int widgetId = -1; // >= 0 for Android AppWidget slots
+    QString provider;  // widget provider component
     int x = -1;
     int y = -1;
+    int w = 1;
+    int h = 1;
+
+    bool isWidget() const { return widgetId >= 0 || !provider.isEmpty(); }
 };
 
 struct CellPos {
@@ -28,6 +34,6 @@ struct PackedGrid {
 };
 
 PackedGrid packHome(const QVector<HomeSlot> &items, int cols, const QSet<QString> &hidden);
-QRectF cellBox(const CellPos &cell, qreal colW);
+QRectF cellBox(const CellPos &cell, qreal colW, int spanW = 1, int spanH = 1);
 
 } // namespace Layout

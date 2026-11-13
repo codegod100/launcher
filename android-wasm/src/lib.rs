@@ -223,6 +223,37 @@ impl ultra::launcher::android::Host for HostState {
         }
         out
     }
+    fn widget_providers(&mut self) -> String {
+        let Ok(mut env) = self.vm.attach_current_thread() else {
+            return "[]".to_owned();
+        };
+        let Ok(res) = env.call_method(&self.activity, "widgetProviders", "()Ljava/lang/String;", &[]) else {
+            return "[]".to_owned();
+        };
+        let Ok(obj) = res.l() else {
+            return "[]".to_owned();
+        };
+        let js: JString = obj.into();
+        env.get_string(&js)
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| "[]".to_owned())
+    }
+    fn add_widget(&mut self, provider: String) {
+        self.call_void_str("addWidget", &provider);
+    }
+    fn remove_widget(&mut self, id: i32) {
+        self.call_void("removeWidget", "(I)V", &[JValue::Int(id as jint)]);
+    }
+    fn place_widgets(&mut self, json: String) {
+        self.call_void_str("placeWidgets", &json);
+    }
+    fn set_widgets_visible(&mut self, visible: bool) {
+        self.call_void(
+            "setWidgetsVisible",
+            "(Z)V",
+            &[JValue::Bool(if visible { 1 } else { 0 })],
+        );
+    }
 }
 
 struct FrameBuf {

@@ -14,8 +14,16 @@ interface android {
     haptic: func();
     /// System bar insets in physical screen pixels: (top, bottom).
     insets: func() -> tuple<u32, u32>;
-    /// Drain queued host events ("home", "back", "insets", "apps-changed:<pkgs>").
+    /// Drain queued host events ("home", "back", "insets", "apps-changed:<pkgs>", "widget-added:<id>:<provider>").
     poll-events: func() -> list<string>;
+    /// JSON array of {"provider": string, "label": string, "w": u32, "h": u32}.
+    widget-providers: func() -> string;
+    /// Bind a widget for provider; emits "widget-added:<id>:<provider>".
+    add-widget: func(provider: string);
+    remove-widget: func(id: s32);
+    /// Place live widget views: JSON [[id, x, y, w, h], ...] in physical screen px.
+    place-widgets: func(json: string);
+    set-widgets-visible: func(visible: bool);
 }
 
 world gui {

@@ -18,6 +18,13 @@ struct AppInfo {
     bool system = false;
 };
 
+struct WidgetProviderInfo {
+    QString provider;
+    QString label;
+    int w = 2;
+    int h = 2;
+};
+
 class LauncherWindow : public QRasterWindow {
     Q_OBJECT
 
@@ -35,12 +42,14 @@ protected:
     void timerEvent(QTimerEvent *event) override;
 
 private:
-    enum class SheetKind { None, Menu, HomeItem, DrawerApp };
+    enum class SheetKind { None, Menu, HomeItem, DrawerApp, Widgets };
 
     void pollHostEvents();
     void refreshInsets();
     void refreshApps();
+    void refreshWidgetProviders();
     void loadHome();
+    void seedDefaultHome();
     void saveHome() const;
     QImage iconFor(const QString &component, int px);
 
@@ -82,8 +91,11 @@ private:
     QVector<AppInfo> m_apps;
     QHash<QString, int> m_appIndex;
     QVector<Layout::HomeSlot> m_home;
+    QVector<WidgetProviderInfo> m_providers;
     QHash<QString, QImage> m_icons;
     QSet<QString> m_missingIcons;
+    QString m_lastPlacedWidgets;
+    bool m_lastWidgetsVisible = true;
 
     // UI state
     bool m_drawerOpen = false;
